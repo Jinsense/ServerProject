@@ -1,0 +1,79 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Dump">
+      <UniqueIdentifier>{0ba2f1cf-5926-48c0-8af3-f1d95a76d77c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Log">
+      <UniqueIdentifier>{1b6d5ec3-52e9-4e79-9a4b-904af3fd022a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="MemoryPool">
+      <UniqueIdentifier>{fdf7bd2a-7dff-47c2-a2a4-1e7fbc96ec85}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Network">
+      <UniqueIdentifier>{f2745223-2a17-4487-b7df-07f36f570997}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Buffer">
+      <UniqueIdentifier>{a0c8f464-9915-400d-8bde-bbce1e3ba4e6}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="APIHook.cpp">
+      <Filter>Dump</Filter>
+    </ClCompile>
+    <ClCompile Include="Dump.cpp">
+      <Filter>Dump</Filter>
+    </ClCompile>
+    <ClCompile Include="Log.cpp">
+      <Filter>Log</Filter>
+    </ClCompile>
+    <ClCompile Include="MemoryPool_TLS.h">
+      <Filter>MemoryPool</Filter>
+    </ClCompile>
+    <ClCompile Include="LockFreeStack.h">
+      <Filter>MemoryPool</Filter>
+    </ClCompile>
+    <ClCompile Include="LockFreeQueue.h">
+      <Filter>MemoryPool</Filter>
+    </ClCompile>
+    <ClCompile Include="LanServer.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="LanServer_Monitor.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="Packet.cpp">
+      <Filter>Buffer</Filter>
+    </ClCompile>
+    <ClCompile Include="RingBuffer.cpp">
+      <Filter>Buffer</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="APIHook.h">
+      <Filter>Dump</Filter>
+    </ClInclude>
+    <ClInclude Include="Dump.h">
+      <Filter>Dump</Filter>
+    </ClInclude>
+    <ClInclude Include="Log.h">
+      <Filter>Log</Filter>
+    </ClInclude>
+    <ClInclude Include="MemoryPool.h">
+      <Filter>MemoryPool</Filter>
+    </ClInclude>
+    <ClInclude Include="LanServer.h">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="LanServer_Monitor.h">
+      <Filter>Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Packet.h">
+      <Filter>Buffer</Filter>
+    </ClInclude>
+    <ClInclude Include="RingBuffer.h">
+      <Filter>Buffer</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
