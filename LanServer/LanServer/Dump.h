@@ -1,4 +1,6 @@
-#pragma once
+#ifndef _LANSERVER_DUMP_DUMP_H_
+#define _LANSERVER_DUMP_DUMP_H_
+
 #include <windows.h>
 #include <tchar.h>
 #include <locale.h>
@@ -143,3 +145,5 @@ public:
 };
 
 extern CCrashDump * g_CrashDump;
+
+#endif _LANSERVER_DUMP_DUMP_H_

@@ -1,4 +1,6 @@
-#pragma once
+#ifndef _LANSERVER_MEMORYPOOL_QUEUE_H_
+#define _LANSERVER_MEMORYPOOL_QUEUE_H_
+
 #include <Windows.h>
 #include "MemoryPool.h"
 
@@ -128,3 +130,5 @@ inline LONG CLockFreeQueue<Type>::GetUseCount()
 {
 	return _useCount;
 }
+
+#endif _LANSERVER_MEMORYPOOL_QUEUE_H_

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _LANSERVER_MEMORYPOOL_LFSTACK_H_
+#define _LANSERVER_MEMORYPOOL_LFSTACK_H_
 #include "MemoryPool.h"
 
 
@@ -116,3 +117,5 @@ inline long CLockFreeStack<Type>::GetUseCount()
 {
 	return *_pUseCount;
 }
+
+#endif _LANSERVER_MEMORYPOOL_LFSTACK_H_

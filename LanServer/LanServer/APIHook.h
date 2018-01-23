@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _LANSERVER_DUMP_APIHOOK_H_
+#define _LANSERVER_DUMP_APIHOOK_H_
 
 #define chINRANGE(low, Num, High) (((low) <= (Num)) && ((Num) <= (High)))
 
@@ -321,3 +322,4 @@ private:
 	static CAPIHook sm_GetProcAddress;
 };
 
+#endif _LANSERVER_DUMP_APIHOOK_H_

@@ -1,4 +1,6 @@
-#pragma once
+#ifndef _LANSERVER_MEMORYPOOL_TLS_H_
+#define _LANSERVER_MEMORYPOOL_TLS_H_
+
 #include <Windows.h>
 #include <stack>
 #include "MemoryPool.h"
@@ -150,3 +152,5 @@ private:
 
 	friend class CChunk;
 };
+
+#endif _LANSERVER_MEMORYPOOL_TLS_H_

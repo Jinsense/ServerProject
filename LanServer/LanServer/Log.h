@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _LANSERVER_LOG_LOG_H_
+#define _LANSERVER_LOG_LOG_H_
 
 #include <direct.h>
 #include <wchar.h>
@@ -73,3 +74,4 @@ private:
 	WCHAR			_SaveDirectory[25];
 };
 
+#endif _LANSERVER_LOG_LOG_H_

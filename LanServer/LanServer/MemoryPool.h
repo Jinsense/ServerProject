@@ -1,4 +1,6 @@
-#pragma once
+#ifndef _LANSERVER_MEMORYPOOL_POOL_H_
+#define _LANSERVER_MEMORYPOOL_POOL_H_
+
 #include <Windows.h>
 
 
@@ -102,3 +104,5 @@ inline void CFreeList<Type>::Free(Type * pData)
 			return;
 	}
 }
+
+#endif _LANSERVER_MEMORYPOOL_POOL_H_

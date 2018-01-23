@@ -1,4 +1,6 @@
-#pragma once
+#ifndef _LANSERVER_BUFFER_PACKET_H_
+#define _LANSERVER_BUFFER_PACKET_H_
+
 #include "MemoryPool.h"
 #include "MemoryPool_TLS.h"
 
@@ -131,3 +133,4 @@ private:
 	long			HeaderSetFlag;
 };
 
+#endif _LANSERVER_BUFFER_PACKET_H_

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _LANSERVER_BUFFER_RINGBUFFER_H_
+#define _LANSERVER_BUFFER_RINGBUFFER_H_
 
 class CRingBuffer
 {
@@ -47,3 +48,5 @@ private:
 	CRITICAL_SECTION _cs;
 	PCRITICAL_SECTION _pCS;
 };
+
+#endif _LANSERVER_BUFFER_RINGBUFFER_H_
