@@ -19,9 +19,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="APIHook.cpp">
-      <Filter>Dump</Filter>
-    </ClCompile>
     <ClCompile Include="Dump.cpp">
       <Filter>Dump</Filter>
     </ClCompile>
@@ -49,11 +46,11 @@
     <ClCompile Include="RingBuffer.cpp">
       <Filter>Buffer</Filter>
     </ClCompile>
+    <ClCompile Include="APIHook.cpp">
+      <Filter>Dump</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="APIHook.h">
-      <Filter>Dump</Filter>
-    </ClInclude>
     <ClInclude Include="Dump.h">
       <Filter>Dump</Filter>
     </ClInclude>
@@ -74,6 +71,9 @@
     </ClInclude>
     <ClInclude Include="RingBuffer.h">
       <Filter>Buffer</Filter>
+    </ClInclude>
+    <ClInclude Include="APIHook.h">
+      <Filter>Dump</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

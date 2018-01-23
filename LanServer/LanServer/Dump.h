@@ -115,7 +115,7 @@ public:
 		SetUnhandledExceptionFilter(MyExceptionFilter);
 
 		//	C 런타임 라이브러리 내부의 예외핸들러 등록을 막기 위해서 API 후킹
-		static CAPIHook apiHook("kernel32.dll", "SetUnhandledExceptionFilter", (PROC)RedirectedSetUnhanldedExceptionFilter, true);
+		static CAPIHook apiHook((PSTR)"kernel32.dll", (PSTR)"SetUnhandledExceptionFilter", (PROC)RedirectedSetUnhanldedExceptionFilter, true);
 	}
 
 	//	Invalid Parameter handler
