@@ -72,17 +72,18 @@ protected:
 	virtual void	OnClientLeave(ULONG64 sessionkey) = 0;
 	virtual void	OnConnectionRequest(WCHAR *pClientIP, int port) = 0;
 	virtual void	OnError(int errorcode, WCHAR *pError) = 0;
-	long	GetClientCount();
+
 	bool	ServerStart(WCHAR *pOpenIP, int port, int maxworkerthread,
 				bool bNodelay, int maxsession);
 	bool	ServerStop();
 	bool	SendPacket(ULONG64 sessionkey, CPacket *pPacket);
+	long	GetClientCount() { return _connectclient; }
 	bool	GetShutdownMode() { return _bShutdown; }
 	bool	GetWhiteIPMode() { return _bWhiteipmode; }
 	bool	GetMonitorMode() { return _bMonitorflag; }
-	bool	SetShutdownMode(bool bFlag) { _bShutdown = bFlag; return _bShutdown; }
+	bool	SetShutdownMode(bool bFlag);
 	bool	SetWhiteIPMode(bool bFlag) { _bWhiteipmode = bFlag; return _bWhiteipmode; }
-	bool	SetMonitorModeb(bool bFlag) { _bMonitorflag = bFlag; return _bMonitorflag; }
+	bool	SetMonitorMode(bool bFlag) { _bMonitorflag = bFlag; return _bMonitorflag; }
 
 	SESSION*	SessionAcquireLock(ULONG64 sessionkey);
 	void	SessionAcquireFree(SESSION *pSession);

@@ -10,10 +10,10 @@
     <Filter Include="MemoryPool">
       <UniqueIdentifier>{fdf7bd2a-7dff-47c2-a2a4-1e7fbc96ec85}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Network">
+    <Filter Include="IOCP">
       <UniqueIdentifier>{f2745223-2a17-4487-b7df-07f36f570997}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Buffer">
+    <Filter Include="Network">
       <UniqueIdentifier>{a0c8f464-9915-400d-8bde-bbce1e3ba4e6}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
@@ -35,16 +35,16 @@
       <Filter>MemoryPool</Filter>
     </ClCompile>
     <ClCompile Include="LanServer.cpp">
-      <Filter>Network</Filter>
+      <Filter>IOCP</Filter>
     </ClCompile>
     <ClCompile Include="LanServer_Monitor.cpp">
-      <Filter>Network</Filter>
+      <Filter>IOCP</Filter>
     </ClCompile>
     <ClCompile Include="Packet.cpp">
-      <Filter>Buffer</Filter>
+      <Filter>Network</Filter>
     </ClCompile>
     <ClCompile Include="RingBuffer.cpp">
-      <Filter>Buffer</Filter>
+      <Filter>Network</Filter>
     </ClCompile>
     <ClCompile Include="APIHook.cpp">
       <Filter>Dump</Filter>
@@ -61,16 +61,16 @@
       <Filter>MemoryPool</Filter>
     </ClInclude>
     <ClInclude Include="LanServer.h">
-      <Filter>Network</Filter>
+      <Filter>IOCP</Filter>
     </ClInclude>
     <ClInclude Include="LanServer_Monitor.h">
-      <Filter>Network</Filter>
+      <Filter>IOCP</Filter>
     </ClInclude>
     <ClInclude Include="Packet.h">
-      <Filter>Buffer</Filter>
+      <Filter>Network</Filter>
     </ClInclude>
     <ClInclude Include="RingBuffer.h">
-      <Filter>Buffer</Filter>
+      <Filter>Network</Filter>
     </ClInclude>
     <ClInclude Include="APIHook.h">
       <Filter>Dump</Filter>

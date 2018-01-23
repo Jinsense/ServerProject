@@ -1,5 +1,5 @@
-#ifndef _LANSERVER_BUFFER_PACKET_H_
-#define _LANSERVER_BUFFER_PACKET_H_
+#ifndef _LANSERVER_NETWORK_PACKET_H_
+#define _LANSERVER_NETWORK_PACKET_H_
 
 #include "MemoryPool.h"
 #include "MemoryPool_TLS.h"
@@ -7,130 +7,106 @@
 class CPacket
 {
 public:
-	enum en_DEFINE
+	enum class en_PACKETDEFINE
 	{
-		eMAX_SHORT_HEADER_SIZE = 2,
-		eMAX_HEADER_SIZE = 2,
-		eMAX_PAYLOAD_SIZE = 4096,
-		eMAX_BUFFER_SIZE = eMAX_HEADER_SIZE + eMAX_PAYLOAD_SIZE,
-
-		ePUSH_ERR = 0,
-		ePOP_ERR = 1
+		PUSH_ERR = 0,
+		POP_ERR = 1,
+		SHORT_HEADER_SIZE = 2,
+		HEADER_SIZE = 2,
+		PAYLOAD_SIZE = 4096,
+		BUFFER_SIZE = HEADER_SIZE + PAYLOAD_SIZE,
 	};
+
 	struct st_ERR_INFO
 	{
-		int _errType;
-		int _wantSize;
-		int _possibleSize;
+		int iErrType;
+		int iRequestSize;
+		int iCurrentSize;
 
-		st_ERR_INFO(int errType, int wantSize, int possibleSize)
+		st_ERR_INFO(int _iErrType, int _iRequestSize, int _iCurrentSize)
 		{
-			_errType = errType;
-			_wantSize = wantSize;
-			_possibleSize = possibleSize;
+			iErrType = _iErrType;
+			iRequestSize = _iRequestSize;
+			iCurrentSize = _iCurrentSize;
 		}
 	};
-
-public:
-	//	static		CFreeList<CPacket> *pMemoryPool;
-	static		CMemoryPool_TLS<CPacket> *pMemoryPool;
-	static		CPacket * Alloc();
-	static void MemoryPool_Init();
-
-	static __int64		GetUsePool() { return pMemoryPool->GetUseCount(); }
-	static __int64		GetAllocPool() { return pMemoryPool->GetAllocCount(); }
-
-	void		addRef();
-	void		Free();
 
 public:
 	CPacket();
 	~CPacket();
 
+	static CPacket*	Alloc();
+	static void		MemoryPoolInit();
+	static __int64	GetUsePool() { return m_pMemoryPool->GetUseCount(); }
+	static __int64	GetAllocPool() { return m_pMemoryPool->GetAllocCount(); }
+
+	void	AddRef();
+	void	Free();
+	void	Clear();
+	void	PushData(char *pSrc, int iSize);
+	void	PopData(char *pDest, int iSize);
+	void	PushData(int iSize);
+	void	PopData(int iSize);
+	void	SetHeader(char * pHeader);
+	void	SetHeader_CustomHeader(char *pHeader, int iCustomHeaderSize);
+	void	SetHeader_CustomShort(unsigned short shHeader);
+	char*	GetBufferPtr() { return m_chBuffer; }
+	char*	GetWritePtr() { return m_pWritePos; }
+	char*	GetReadPtr() { return m_pReadPos; }
+	int		GetBufferSize() { return m_iBufferSize; }
+	int		GetDataSize() { return m_iDataSize; }
+	int		GetPacketSize()
+	{
+		return static_cast<int>(en_PACKETDEFINE::HEADER_SIZE) + m_iDataSize;
+	}
+	int		GetPacketSize_CustomHeader(int iCustomeHeaderSize)
+	{
+		return iCustomeHeaderSize + m_iDataSize;
+	}
+	int		GetFreeSize()
+	{
+		return static_cast<int>(en_PACKETDEFINE::PAYLOAD_SIZE) - m_iDataSize;
+	}
 
 public:
-	void Clear();
+	CPacket & operator=(CPacket &Packet);
 
-	//	NetServer에서 사용하기 위해서 friend 처리를 해야함
-	//	컨텐츠에서 호출되지 않게 하기 위해서임
-	int GetBufferSize() { return _bufferSize; }
-	int GetDataSize() { return _dataSize; }
-	int GetPacketSize() { return eMAX_HEADER_SIZE + _dataSize; }
-	int GetPacketSize_CustomHeader(int iCustomeHeaderSize) { return iCustomeHeaderSize + _dataSize; }
-	int GetFreeSize() { return eMAX_PAYLOAD_SIZE - _dataSize; }
+	CPacket& operator<<(char Value);
+	CPacket& operator<<(unsigned char Value);
+	CPacket& operator<<(short Value);
+	CPacket& operator<<(unsigned short Value);
+	CPacket& operator<<(int Value);
+	CPacket& operator<<(unsigned int Value);
+	CPacket& operator<<(long Value);
+	CPacket& operator<<(unsigned long Value);
+	CPacket& operator<<(float Value);
+	CPacket& operator<<(__int64 Value);
+	CPacket& operator<<(double Value);
 
-	char* GetBufferPtr() { return _buffer; }
-	char* GetWritePtr() { return _pWritePos; }
-	char* GetReadPtr() { return _pReadPos; }
-
-	void PushData(char* pSrc, int size);
-	void PopData(char* pDest, int size);
-
-	void PushData(int size);
-	void PopData(int size);
-
-	void SetHeader(char * pHeader);				//		기본 5바이트 헤더 셋팅
-	void SetHeader_CustomHeader(char * pHeader, int iCustomHeaderSize);		//	헤더크기 지정 후 셋팅
-	void SetHeader_CustomShort(unsigned short Header);		//	2바이트짜리 헤더 셋팅
+	CPacket& operator >> (char& Value);
+	CPacket& operator >> (unsigned char& Value);
+	CPacket& operator >> (short& Value);
+	CPacket& operator >> (unsigned short& Value);
+	CPacket& operator >> (int& Value);
+	CPacket& operator >> (unsigned int& Value);
+	CPacket& operator >> (long& Value);
+	CPacket& operator >> (unsigned long& Value);
+	CPacket& operator >> (float& Value);
+	CPacket& operator >> (__int64& Value);
+	CPacket& operator >> (double& Value);
 
 public:
-	//원본이 몇 번 Pop을 한 상태라해도 복사 대상은 굳이 그것까지는 따라하지 않고 그냥 _pReadPos를
-	//버퍼시작점으로 땡기기 때문에 결과적으로 경우에 따라 사용할 수 있는 공간이 늘어나는 현상이 있다.
-	CPacket & operator=(CPacket& srcPacket);
-
-
-	/*//////////////////////////////////////////////////////////////
-	Push
-	//////////////////////////////////////////////////////////////*/
-	CPacket& operator<<(char value);
-	CPacket& operator<<(unsigned char value);
-
-	CPacket& operator<<(short value);
-	CPacket& operator<<(unsigned short value);
-
-	CPacket& operator<<(int value);
-	CPacket& operator<<(unsigned int value);
-	CPacket& operator<<(long value);
-	CPacket& operator<<(unsigned long value);
-	CPacket& operator<<(float value);
-
-	CPacket& operator<<(__int64 value);
-	CPacket& operator<<(double value);
-
-
-
-	/*//////////////////////////////////////////////////////////////
-	Pop
-	//////////////////////////////////////////////////////////////*/
-	CPacket& operator >> (char& value);
-	CPacket& operator >> (unsigned char& value);
-
-	CPacket& operator >> (short& value);
-	CPacket& operator >> (unsigned short& value);
-
-	CPacket& operator >> (int& value);
-	CPacket& operator >> (unsigned int& value);
-	CPacket& operator >> (long& value);
-	CPacket& operator >> (unsigned long& value);
-	CPacket& operator >> (float& value);
-
-	CPacket& operator >> (__int64& value);
-	CPacket& operator >> (double& value);
-
-
+	static		CMemoryPool_TLS<CPacket> *m_pMemoryPool;
 
 private:
-	char				_buffer[eMAX_BUFFER_SIZE];
-	int					_bufferSize;
-	char*				_pEndPos;
-
-	int					_dataSize;
-	__int64				_RefCount;
-
-	char*			_pWritePos;
-	char*			_pReadPos;
-
-	long			HeaderSetFlag;
+	char		m_chBuffer[static_cast<int>(en_PACKETDEFINE::BUFFER_SIZE)];
+	char		*m_pEndPos;
+	char		*m_pWritePos;
+	char		*m_pReadPos;
+	int			m_iBufferSize;
+	int			m_iDataSize;
+	__int64		m_iRefCount;
+	long		m_lHeaderSetFlag;
 };
 
-#endif _LANSERVER_BUFFER_PACKET_H_
+#endif _LANSERVER_NETWORK_PACKET_H_

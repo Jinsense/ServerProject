@@ -1,121 +1,118 @@
-#ifndef _LANSERVER_MEMORYPOOL_LFSTACK_H_
-#define _LANSERVER_MEMORYPOOL_LFSTACK_H_
-#include "MemoryPool.h"
+#ifndef _LANSERVER_MEMORY_STACK_H_
+#define _LANSERVER_MEMORY_STACK_H_
 
+#include "MemoryPool.h"
 
 template<class Type>
 class CLockFreeStack
 {
 	struct st_NODE
 	{
-		st_NODE* pNext;
-		Type data;
+		st_NODE*			pNext;
+		Type				Data;
+
+		st_NODE() :
+			pNext(nullptr),
+			Data(NULL) {}
 	};
 	struct st_TOP
 	{
-		st_NODE* pNode;
-		LONG64 uniqueKey;
-	};
+		st_NODE*			pNode;
+		unsigned __int64	iCount;
 
+		st_TOP() :
+			pNode(nullptr),
+			iCount(NULL) {}
+	};
 
 public:
 	CLockFreeStack();
 	~CLockFreeStack();
 
-	void Push(Type data);
-	void Pop(Type* pData);
+	void Push(Type Data);
+	void Pop(Type *pData);
 
-	LONG GetUseCount();
-
+	long GetUseCount();
 
 private:
-	LONG * _pUseCount;
-	st_TOP* _pTop;
-
-	CFreeList<st_NODE> _freeList;
+	long				m_lUseCount;
+	st_TOP				*m_pTop;
+	CFreeList<st_NODE>	m_FreeList;
 };
-
 
 template<class Type>
 inline CLockFreeStack<Type>::CLockFreeStack()
 {
-	_pUseCount = (LONG*)_aligned_malloc(sizeof(LONG), 4);
-	*_pUseCount = 0;
+	m_lUseCount = 0;
 
-	_pTop = (st_TOP*)_aligned_malloc(sizeof(st_TOP), 16);
-	_pTop->pNode = nullptr;
-	_pTop->uniqueKey = 0;
+	m_pTop = (st_TOP*)_aligned_malloc(sizeof(st_TOP), 16);
+	m_pTop->pNode = nullptr;
+	m_pTop->iCount = 0;
 }
-
 
 template<class Type>
 inline CLockFreeStack<Type>::~CLockFreeStack()
 {
-	st_NODE* pNode = _pTop->pNode;
-	while (pNode)
+	st_NODE *_pNode = m_pTop->pNode;
+	while (_pNode)
 	{
-		st_NODE* pNext = pNode->pNext;
-		_freeList.Free(pNode);
-		pNode = pNext;
-
-		(*_pUseCount)--;
+		st_NODE *_pNext = _pNode->pNext;
+		m_FreeList.Free(_pNode);
+		_pNode = _pNext;
+		InterlockedDecrement(&m_lUseCount);
 	}
-
-	_aligned_free(_pTop);
-	_aligned_free(_pUseCount);
+	_aligned_free(m_pTop);
 }
 
-
 template<class Type>
-inline void CLockFreeStack<Type>::Push(Type data)
+inline void CLockFreeStack<Type>::Push(Type Data)
 {
-	st_NODE* pNode = _freeList.Alloc();
-	pNode->data = data;
+	st_NODE *_pNode = m_FreeList.Alloc();
+	_pNode->Data = Data;
 
-	st_TOP top;
-	top.pNode = _pTop->pNode;
-	top.uniqueKey = _pTop->uniqueKey;
-	while(1)
+	st_TOP _Top;
+	_Top.pNode = m_pTop->pNode;
+	_Top.iCount = m_pTop->iCount;
+	for (;;)
 	{
-		pNode->pNext = top.pNode;
-		if (InterlockedCompareExchange128((LONG64*)_pTop, top.uniqueKey + 1, (LONG64)pNode, (LONG64*)&top))
+		_pNode->pNext = _Top.pNode;
+		if (InterlockedCompareExchange128((LONG64*)m_pTop, _Top.iCount + 1,
+			(LONG64)_pNode, (LONG64*)&_Top))
 		{
-			InterlockedIncrement(_pUseCount);
+			InterlockedIncrement(&m_lUseCount);
 			return;
 		}
 	}
 }
 
-
 template<class Type>
-inline void CLockFreeStack<Type>::Pop(Type * pData)
+inline void CLockFreeStack<Type>::Pop(Type *pData)
 {
-	if (InterlockedDecrement(_pUseCount) < 0)
+	if (InterlockedDecrement(&m_lUseCount) < 0)
 	{
-		InterlockedIncrement(_pUseCount);
+		InterlockedIncrement(&m_lUseCount);
 		*pData = nullptr;
 		return;
 	}
-
-	st_TOP top;
-	top.pNode = _pTop->pNode;
-	top.uniqueKey = _pTop->uniqueKey;
-	while(1)
+	st_TOP _Top;
+	_Top.pNode = m_pTop->pNode;
+	_Top.iCount = m_pTop->iCount;
+	for (;;)
 	{
-		if (InterlockedCompareExchange128((LONG64*)_pTop, top.uniqueKey + 1, (LONG64)top.pNode->pNext, (LONG64*)&top))
+		if (InterlockedCompareExchange128((LONG64*)m_pTop, _Top.iCount + 1,
+			(LONG64)_Top.pNode->pNext, (LONG64*)&_Top))
 		{
-			*pData = top.pNode->data;
-			_freeList.Free(top.pNode);
+			*pData = _Top.pNode->Data;
+			m_FreeList.Free(_Top.pNode);
 			return;
 		}
 	}
 }
-
 
 template<class Type>
 inline long CLockFreeStack<Type>::GetUseCount()
 {
-	return *_pUseCount;
+	return m_lUseCount;
 }
 
-#endif _LANSERVER_MEMORYPOOL_LFSTACK_H_
+#endif _LANSERVER_MEMORY_STACK_H_

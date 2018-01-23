@@ -1,52 +1,39 @@
-#ifndef _LANSERVER_BUFFER_RINGBUFFER_H_
-#define _LANSERVER_BUFFER_RINGBUFFER_H_
+#ifndef _LANSERVER_NETWORK_RINGBUFFER_H_
+#define _LANSERVER_NETWORK_RINGBUFFER_H_
+
 
 class CRingBuffer
 {
 public:
 	CRingBuffer();
-	CRingBuffer(int bufferSize);
+	CRingBuffer(int iBufferSize);
 	~CRingBuffer();
-	void Initialize(int bufferSize);
-
-
 public:
-	int GetBufferSize();
-	int GetFreeSize();
-	int GetUseSize();
-
-	int GetNotBrokenPushSize();
-	int GetNotBrokenPopSize();
-
-	int Enqueue(const char* pData, int dataSize);
-	int Dequeue(char* pData, int dataSize);
-
-	int Enqueue(int dataSize);
-	int Dequeue(int dataSize);
-
-	int Peek(char* pData, int dataSize);
-
-	void Clear() { _front = _rear; }
-
-	char* GetBufferPtr() { return _pBuffer; }
-	char* GetWriteBufferPtr() { return &_pBuffer[_rear]; }
-	char* GetReadBufferPtr() { return &_pBuffer[_front]; }
-
-
-public:
-	void Lock();
-	void Unlock();
-
+	void	Initialize(int iBufferSize);
+	void	Lock();
+	void	Unlock();
+	void	Clear() { m_iFront = m_iRear; }
+	char*	GetBufferPtr() { return m_pBuffer; }
+	char*	GetWriteBufferPtr() { return &m_pBuffer[m_iRear]; }
+	char*	GetReadBufferPtr() { return &m_pBuffer[m_iFront]; }
+	int		GetBufferSize();
+	int		GetFreeSize();
+	int		GetUseSize();
+	int		GetNotBrokenPushSize();
+	int		GetNotBrokenPopSize();
+	int		Enqueue(const char *pData, int iDataSize);
+	int		Dequeue(char *pData, int iDataSize);
+	int		Enqueue(int iDataSize);
+	int		Dequeue(int iDataSize);
+	int		Peek(char *pData, int iDataSize);
 
 private:
-	char* _pBuffer;
-	int _bufferSize;
-
-	int _front;
-	int _rear;
-
-	CRITICAL_SECTION _cs;
-	PCRITICAL_SECTION _pCS;
+	char	*m_pBuffer;
+	int		m_iBufferSize;
+	int		m_iFront;
+	int		m_iRear;
+	CRITICAL_SECTION	m_CS;
+	PCRITICAL_SECTION	m_pCS;
 };
 
-#endif _LANSERVER_BUFFER_RINGBUFFER_H_
+#endif _LANSERVER_NETWORK_RINGBUFFER_H_

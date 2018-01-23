@@ -36,12 +36,23 @@ CLanServer::~CLanServer()
 
 void CLanServer::Disconnect(ULONG64 sessionkey)
 {
+	ULONG64 Index = sessionkey >> 48;
+	SESSION *pSession = &_pSessionarray[Index];
 
-}
+	InterlockedIncrement(&pSession->iocount);
 
-long CLanServer::GetClientCount()
-{
+	if (true == pSession->bRelease || sessionkey != pSession->sessionkey)
+	{
+		if (0 == InterlockedDecrement(&(pSession->iocount)))
+			ClientRelease(pSession);
+		return;
+	}
+	shutdown(pSession->sock, SD_BOTH);
 
+	if (0 == InterlockedDecrement(&(pSession->iocount)))
+		ClientRelease(pSession);
+
+	return;
 }
 
 bool CLanServer::ServerStart(WCHAR *pOpenIP, int port, int maxworkerthread,
@@ -53,7 +64,7 @@ bool CLanServer::ServerStart(WCHAR *pOpenIP, int port, int maxworkerthread,
 	setlocale(LC_ALL, "Korean");
 	InitializeCriticalSection(&_sessioncs);
 
-	CPacket::MemoryPool_Init();
+	CPacket::MemoryPoolInit();
 
 	_pCompare = (COMPARE*)_aligned_malloc(sizeof(COMPARE), 16);
 	_pCompare->iocount = 0;
@@ -127,31 +138,149 @@ bool CLanServer::ServerStart(WCHAR *pOpenIP, int port, int maxworkerthread,
 
 bool CLanServer::ServerStop()
 {
+	//	ServerStart에서 동적할당 해준 모든 멤버변수에 대해 반환작업
+	//	그 외에 서버 재가동을 위해 필요한 셋팅 추가
+	//	Accept, Worker, Monitor 스레드 중단
+	wprintf(L"[Server :: ServerStop]	Start\n");
+
+	_bShutdown = true;
+
+	PostQueuedCompletionStatus(_hIOCP, 0, 0, 0);
+	WaitForMultipleObjects(_allthreadcnt, _hAllThread, true, INFINITE);
+
+	while (0 != _sessionstack.GetUseCount())
+	{
+		unsigned int *pIndex = nullptr;
+		_sessionstack.Pop(&pIndex);
+	}
+
+	_aligned_free(_pCompare);
+	delete _pSessionarray;
+	delete _pIndex;
+
+	WSACleanup();
+
+	_listensock = INVALID_SOCKET;
+
+	_bWhiteipmode = false;
+	_allthreadcnt = 0;
+	_sessionkeycnt = 1;
+	_accepttps = 0;
+	_accepttotal = 0;
+	_recvpackettps = 0;
+	_sendpackettps = 0;
+	_connectclient = 0;
+
+	wprintf(L"[Server :: ServerStop]	Complete\n");
 	return true;
 }
 
 bool CLanServer::SendPacket(ULONG64 sessionkey, CPacket *pPacket)
 {
+	ULONG64 index = df_GET_INDEX(index, sessionkey);
+
+	if (1 == InterlockedIncrement(&_pSessionarray[index].iocount))
+	{
+		if (0 == InterlockedDecrement(&_pSessionarray[index].iocount))
+			ClientRelease(&_pSessionarray[index]);
+		return false;
+	}
+
+	if (true == _pSessionarray[index].bRelease)
+	{
+		if (0 == InterlockedDecrement(&_pSessionarray[index].iocount))
+			ClientRelease(&_pSessionarray[index]);
+		return false;
+	}
+
+	if (_pSessionarray[index].sessionkey == sessionkey)
+	{
+		if (_pSessionarray[index].bLoginflag != true)
+			return false;
+		_sendpackettps++;
+		pPacket->AddRef();
+		pPacket->SetHeader_CustomShort(pPacket->GetDataSize());
+		_pSessionarray[index].sendqueue.Enqueue(pPacket);
+
+		if (0 == InterlockedDecrement(&_pSessionarray[index].iocount))
+		{
+			ClientRelease(&_pSessionarray[index]);
+			return false;
+		}
+		SendPost(&_pSessionarray[index]);
+		return true;
+	}
+	else
+	{
+		if (0 == InterlockedDecrement(&_pSessionarray[index].iocount))
+			ClientRelease(&_pSessionarray[index]);
+		return false;		
+	}
+	return true;
+}
+
+bool CLanServer::SetShutdownMode(bool bFlag)
+{
+	if (false == bFlag)
+	{
+		_bShutdown = false;
+		return false;
+	}
+
+	ServerStop();
 	return true;
 }
 
 SESSION* CLanServer::SessionAcquireLock(ULONG64 sessionkey)
 {
+	ULONG64 index = sessionkey >> 48;
+	SESSION *pSession = &_pSessionarray[index];
+	InterlockedIncrement(&pSession->iocount);
 
+	return pSession;
 }
 
 void CLanServer::SessionAcquireFree(SESSION *pSession)
 {
-
+	LONG retval = InterlockedDecrement(&pSession->iocount);
+	if (0 >= retval)
+	{
+		ClientRelease(pSession);
+	}
 }
 
 bool CLanServer::ServerInit()
 {
+	WSADATA data;
+	int retval = WSAStartup(MAKEWORD(2, 2), &data);
+	if (0 != retval)
+	{
+		wprintf(L"[Server :: ServerInit]	WSAStartup Error\n");
+		return false;
+	}
+
+	_hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 0);
+	if (NULL == _hIOCP)
+	{
+		wprintf(L"[Server :: ServerInit]	IOCP Init Error\n");
+		return false;
+	}
+
+	_listensock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP,
+		NULL, 0, WSA_FLAG_OVERLAPPED);
+	if (INVALID_SOCKET == _listensock)
+	{
+		wprintf(L"[Server :: ServerInit]	Listen Socket Init Error\n");
+		return false;
+	}
+
+	wprintf(L"[Server :: ServerInit]	Complete\n");
 	return true;
 }
 
 bool CLanServer::ClientShutdown(SESSION *pSession)
 {
+
 	return true;
 }
 

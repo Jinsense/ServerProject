@@ -1,25 +1,20 @@
 #include "Packet.h"
-#include "Dump.h"
+
 #include <Windows.h>
 
-
-//	CFreeList<CPacket>* CPacket::pMemoryPool = NULL;
-CMemoryPool_TLS<CPacket>* CPacket::pMemoryPool = NULL;
+CMemoryPool_TLS<CPacket>* CPacket::m_pMemoryPool = NULL;
 
 CPacket::CPacket() :
-	_bufferSize(eMAX_BUFFER_SIZE),
-	_pEndPos(_buffer + eMAX_BUFFER_SIZE)
+	m_iBufferSize(static_cast<int>(en_PACKETDEFINE::BUFFER_SIZE)),
+	m_pEndPos(m_chBuffer + static_cast<int>(en_PACKETDEFINE::BUFFER_SIZE))
 {
-	ZeroMemory(&_buffer, eMAX_BUFFER_SIZE);
-	_dataSize = 0;
-
-	_pWritePos = _buffer + eMAX_HEADER_SIZE;
-	_pReadPos = _buffer + eMAX_HEADER_SIZE;
-
-	HeaderSetFlag = FALSE;
-	_RefCount = 0;
+	ZeroMemory(&m_chBuffer, static_cast<int>(en_PACKETDEFINE::BUFFER_SIZE));
+	m_iDataSize = 0;
+	m_pWritePos = m_chBuffer + static_cast<int>(en_PACKETDEFINE::HEADER_SIZE);
+	m_pReadPos = m_chBuffer + static_cast<int>(en_PACKETDEFINE::HEADER_SIZE);
+	m_lHeaderSetFlag = false;
+	m_iRefCount = 0;
 }
-
 
 CPacket::~CPacket()
 {
@@ -27,275 +22,245 @@ CPacket::~CPacket()
 
 void CPacket::Clear()
 {
-	ZeroMemory(&_buffer, eMAX_BUFFER_SIZE);
-	_dataSize = 0;
-	_bufferSize = eMAX_BUFFER_SIZE;
-	_pEndPos = _buffer + eMAX_BUFFER_SIZE;
-
-	_pWritePos = _buffer + eMAX_HEADER_SIZE;
-	_pReadPos = _buffer + eMAX_HEADER_SIZE;
-
-	HeaderSetFlag = FALSE;
-	_RefCount = 0;
+	ZeroMemory(&m_chBuffer, static_cast<int>(en_PACKETDEFINE::BUFFER_SIZE));
+	m_iDataSize = 0;
+	m_pWritePos = m_chBuffer + static_cast<int>(en_PACKETDEFINE::HEADER_SIZE);
+	m_pReadPos = m_chBuffer + static_cast<int>(en_PACKETDEFINE::HEADER_SIZE);
+	m_lHeaderSetFlag = false;
+	m_iRefCount = 0;
+	m_iBufferSize = static_cast<int>(en_PACKETDEFINE::BUFFER_SIZE);
+	m_pEndPos = m_chBuffer + static_cast<int>(en_PACKETDEFINE::BUFFER_SIZE);
 }
 
 CPacket * CPacket::Alloc()
 {
-	CPacket * pPacket = pMemoryPool->Alloc();
-	pPacket->Clear();
-	pPacket->addRef();
-	return pPacket;
+	CPacket *_pPacket = m_pMemoryPool->Alloc();
+	_pPacket->Clear();
+	_pPacket->AddRef();
+	return _pPacket;
 }
 
 void CPacket::Free()
 {
-	if (0 >= InterlockedDecrement64(&_RefCount))
+	if (0 >= InterlockedDecrement64(&m_iRefCount))
 	{
-		if (0 > _RefCount)
-			g_CrashDump->Crash();
-		pMemoryPool->Free(this);
+		m_pMemoryPool->Free(this);
 	}
 }
 
-void CPacket::MemoryPool_Init()
+void CPacket::MemoryPoolInit()
 {
-	//	pMemoryPool = new CFreeList<CPacket>();
-	if (pMemoryPool == nullptr)
-		pMemoryPool = new CMemoryPool_TLS<CPacket>();
+	if (m_pMemoryPool == nullptr)
+		m_pMemoryPool = new CMemoryPool_TLS<CPacket>();
 }
 
-void CPacket::addRef()
+void CPacket::AddRef()
 {
-	InterlockedIncrement64(&_RefCount);
+	InterlockedIncrement64(&m_iRefCount);
 }
 
-void CPacket::PushData(char* pSrc, int size)
+void CPacket::PushData(char *pSrc, int iSize)
 {
-	if (_pEndPos - _pWritePos < size)
-		throw st_ERR_INFO(ePUSH_ERR, size, int(_pEndPos - _pWritePos));
-
-	memcpy_s(_pWritePos, size, pSrc, size);
-	_pWritePos += size;
-	_dataSize += size;
+	if (m_pEndPos - m_pWritePos < iSize)
+		throw st_ERR_INFO(static_cast<int>(en_PACKETDEFINE::PUSH_ERR),
+			iSize, int(m_pEndPos - m_pWritePos));
+	memcpy_s(m_pWritePos, iSize, pSrc, iSize);
+	m_pWritePos += iSize;
+	m_iDataSize += iSize;
 }
 
-
-void CPacket::PopData(char* pDest, int size)
+void CPacket::PopData(char *pDest, int iSize)
 {
-	if (_dataSize < size)
-		throw st_ERR_INFO(ePOP_ERR, size, _dataSize);
-
-	memcpy_s(pDest, size, _pReadPos, size);
-	_pReadPos += size;
-	_dataSize -= size;
+	if (m_iDataSize < iSize)
+		throw st_ERR_INFO(static_cast<int>(en_PACKETDEFINE::POP_ERR),
+			iSize, m_iDataSize);
+	memcpy_s(pDest, iSize, m_pReadPos, iSize);
+	m_pReadPos += iSize;
+	m_iDataSize -= iSize;
 }
 
-
-void CPacket::PushData(int size)
+void CPacket::PushData(int iSize)
 {
-	if (_pEndPos - _pWritePos < size)
-		throw st_ERR_INFO(ePUSH_ERR, size, int(_pEndPos - _pWritePos));
-
-	_pWritePos += size;
-	_dataSize += size;
+	if (m_pEndPos - m_pWritePos < iSize)
+		throw st_ERR_INFO(static_cast<int>(en_PACKETDEFINE::PUSH_ERR),
+			iSize, int(m_pEndPos - m_pWritePos));
+	m_pWritePos += iSize;
+	m_iDataSize += iSize;
 }
 
-
-void CPacket::PopData(int size)
+void CPacket::PopData(int iSize)
 {
-	if (_dataSize < size)
-		throw st_ERR_INFO(ePOP_ERR, size, _dataSize);
-
-	_pReadPos += size;
-	_dataSize -= size;
+	if (m_iDataSize < iSize)
+		throw st_ERR_INFO(static_cast<int>(en_PACKETDEFINE::PUSH_ERR),
+			iSize, m_iDataSize);
+	m_pReadPos += iSize;
+	m_iDataSize -= iSize;
 }
 
-
-void CPacket::SetHeader(char * pHeader)
+void CPacket::SetHeader(char *pHeader)
 {
-	if (TRUE == InterlockedCompareExchange(&HeaderSetFlag, FALSE, TRUE))
+	if (true == InterlockedCompareExchange(&m_lHeaderSetFlag, false, true))
 		return;
-	memcpy_s(_buffer, eMAX_HEADER_SIZE, pHeader, eMAX_HEADER_SIZE);
+	memcpy_s(m_chBuffer, static_cast<int>(en_PACKETDEFINE::HEADER_SIZE),
+		pHeader, static_cast<int>(en_PACKETDEFINE::HEADER_SIZE));
 }
 
-void CPacket::SetHeader_CustomHeader(char * pHeader, int iCustomHeaderSize)
+void CPacket::SetHeader_CustomHeader(char *pHeader, int iCustomHeaderSize)
 {
-	if (TRUE == InterlockedCompareExchange(&HeaderSetFlag, FALSE, TRUE))
+	if (true == InterlockedCompareExchange(&m_lHeaderSetFlag, false, true))
 		return;
-	int iSize = eMAX_HEADER_SIZE - iCustomHeaderSize;
-	memcpy_s(&_buffer[iSize], eMAX_HEADER_SIZE, pHeader, iCustomHeaderSize);
+	int iSize = static_cast<int>(en_PACKETDEFINE::HEADER_SIZE) - iCustomHeaderSize;
+	memcpy_s(&m_chBuffer[iSize], static_cast<int>(en_PACKETDEFINE::HEADER_SIZE),
+		pHeader, iCustomHeaderSize);
 }
 
-void CPacket::SetHeader_CustomShort(unsigned short Header)
+void CPacket::SetHeader_CustomShort(unsigned short shHeader)
 {
-	if (TRUE == InterlockedCompareExchange(&HeaderSetFlag, FALSE, TRUE))
+	if (true == InterlockedCompareExchange(&m_lHeaderSetFlag, false, true))
 		return;
-	//	memcpy_s(&_buffer[3], eMAX_SHORT_HEADER_SIZE, &Header, eMAX_SHORT_HEADER_SIZE);
-	memcpy_s(&_buffer, eMAX_SHORT_HEADER_SIZE, &Header, eMAX_SHORT_HEADER_SIZE);
+	memcpy_s(&m_chBuffer, static_cast<int>(en_PACKETDEFINE::SHORT_HEADER_SIZE),
+		&shHeader, static_cast<int>(en_PACKETDEFINE::SHORT_HEADER_SIZE));
 }
 
-CPacket& CPacket::operator=(CPacket& srcPacket)
+CPacket& CPacket::operator=(CPacket& Packet)
 {
-	_dataSize = srcPacket._dataSize;
-
-	_pWritePos = _buffer + eMAX_HEADER_SIZE + _dataSize;
-	_pReadPos = _buffer + eMAX_HEADER_SIZE;
-
-	memcpy_s(_buffer, _dataSize, srcPacket._pReadPos, _dataSize);
+	m_iDataSize = Packet.m_iDataSize;
+	m_pWritePos = m_chBuffer + static_cast<int>(en_PACKETDEFINE::HEADER_SIZE) +
+		m_iDataSize;
+	m_pReadPos = m_chBuffer + static_cast<int>(en_PACKETDEFINE::HEADER_SIZE);
+	memcpy_s(m_chBuffer, m_iDataSize, Packet.m_pReadPos, m_iDataSize);
 
 	return *this;
 }
 
-
-CPacket& CPacket::operator<<(char value)
+CPacket& CPacket::operator<<(char Value)
 {
-	PushData((char*)&value, sizeof(value));
+	PushData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator<<(unsigned char value)
+CPacket& CPacket::operator<<(unsigned char Value)
 {
-	PushData((char*)&value, sizeof(value));
+	PushData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator<<(short value)
+CPacket& CPacket::operator<<(short Value)
 {
-	PushData((char*)&value, sizeof(value));
+	PushData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator<<(unsigned short value)
+CPacket& CPacket::operator<<(unsigned short Value)
 {
-	PushData((char*)&value, sizeof(value));
+	PushData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator<<(int value)
+CPacket& CPacket::operator<<(int Value)
 {
-	PushData((char*)&value, sizeof(value));
+	PushData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator<<(unsigned int value)
+CPacket& CPacket::operator<<(unsigned int Value)
 {
-	PushData((char*)&value, sizeof(value));
+	PushData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator<<(long value)
+CPacket& CPacket::operator<<(long Value)
 {
-	PushData((char*)&value, sizeof(value));
+	PushData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator<<(unsigned long value)
+CPacket& CPacket::operator<<(unsigned long Value)
 {
-	PushData((char*)&value, sizeof(value));
+	PushData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator<<(float value)
+CPacket& CPacket::operator<<(float Value)
 {
-	PushData((char*)&value, sizeof(value));
+	PushData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator<<(__int64 value)
+CPacket& CPacket::operator<<(__int64 Value)
 {
-	PushData((char*)&value, sizeof(value));
+	PushData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator<<(double value)
+CPacket& CPacket::operator<<(double Value)
 {
-	PushData((char*)&value, sizeof(value));
+	PushData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator >> (char& value)
+CPacket& CPacket::operator >> (char& Value)
 {
-	PopData((char*)&value, sizeof(value));
+	PopData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator >> (unsigned char& value)
+CPacket& CPacket::operator >> (unsigned char& Value)
 {
-	PopData((char*)&value, sizeof(value));
+	PopData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator >> (short& value)
+CPacket& CPacket::operator >> (short& Value)
 {
-	PopData((char*)&value, sizeof(value));
+	PopData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator >> (unsigned short& value)
+CPacket& CPacket::operator >> (unsigned short& Value)
 {
-	PopData((char*)&value, sizeof(value));
+	PopData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator >> (int& value)
+CPacket& CPacket::operator >> (int& Value)
 {
-	PopData((char*)&value, sizeof(value));
+	PopData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator >> (unsigned int& value)
+CPacket& CPacket::operator >> (unsigned int& Value)
 {
-	PopData((char*)&value, sizeof(value));
+	PopData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator >> (long& value)
+CPacket& CPacket::operator >> (long& Value)
 {
-	PopData((char*)&value, sizeof(value));
+	PopData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator >> (unsigned long& value)
+CPacket& CPacket::operator >> (unsigned long& Value)
 {
-	PopData((char*)&value, sizeof(value));
+	PopData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator >> (float& value)
+CPacket& CPacket::operator >> (float& Value)
 {
-	PopData((char*)&value, sizeof(value));
+	PopData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator >> (__int64& value)
+CPacket& CPacket::operator >> (__int64& Value)
 {
-	PopData((char*)&value, sizeof(value));
+	PopData((char*)&Value, sizeof(Value));
 	return *this;
 }
 
-
-CPacket& CPacket::operator >> (double& value)
+CPacket& CPacket::operator >> (double& Value)
 {
-	PopData((char*)&value, sizeof(value));
+	PopData((char*)&Value, sizeof(Value));
 	return *this;
 }

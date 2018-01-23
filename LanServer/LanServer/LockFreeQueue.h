@@ -1,134 +1,139 @@
-#ifndef _LANSERVER_MEMORYPOOL_QUEUE_H_
-#define _LANSERVER_MEMORYPOOL_QUEUE_H_
+#ifndef _LANSERVER_MEMORY_QUEUE_H_
+#define _LANSERVER_MEMORY_QUEUE_H_
 
-#include <Windows.h>
 #include "MemoryPool.h"
-
 
 template<class Type>
 class CLockFreeQueue
 {
 	struct st_NODE
 	{
-		st_NODE* pNext;
-		Type data;
-	};
-	struct st_TIP
-	{
-		st_NODE* pNode;
-		LONG64 workCount;
-	};
+		st_NODE				*pNext;
+		Type				Data;
 
+		st_NODE() :
+			pNext(nullptr),
+			Data(NULL) {}
+	};
+	struct st_TOP
+	{
+		st_NODE				*pNode;
+		unsigned __int64	iCount;
+
+		st_TOP() :
+			pNode(nullptr),
+			iCount(NULL) {}
+	};
 
 public:
 	CLockFreeQueue();
 	~CLockFreeQueue();
 
-	void Enqueue(Type data);
-	BOOL Dequeue(Type* pData);
+	void Enqueue(Type Data);
+	bool Dequeue(Type *pData);
 
-	LONG GetUseCount();
-
+	long GetUseCount();
 
 private:
-	LONG _useCount;
-
-	st_TIP* _pFront;
-	st_TIP* _pRear;
-
-	CFreeList<st_NODE> _freeList;
+	long				m_lUseCount;
+	st_TOP				*m_pFront;
+	st_TOP				*m_pRear;
+	CFreeList<st_NODE>	m_FreeList;
 };
-
 
 template<class Type>
 inline CLockFreeQueue<Type>::CLockFreeQueue()
 {
-	_useCount = 0;
+	m_lUseCount = 0;
 
-	_pFront = (st_TIP*)_aligned_malloc(sizeof(st_TIP), 16);
-	_pFront->pNode = _freeList.Alloc();
-	_pFront->pNode->pNext = nullptr;
-	_pFront->workCount = 0;
+	m_pFront = (st_TOP*)_aligned_malloc(sizeof(st_TOP), 16);
+	m_pFront->pNode = m_FreeList.Alloc();
+	m_pFront->pNode->pNext = nullptr;
+	m_pFront->iCount = 0;
 
-	_pRear = (st_TIP*)_aligned_malloc(sizeof(st_TIP), 16);
-	_pRear->pNode = _pFront->pNode;
-	_pRear->workCount = 0;
+	m_pRear = (st_TOP*)_aligned_malloc(sizeof(st_TOP), 16);
+	m_pRear->pNode = m_pFront->pNode;
+	m_pRear->iCount = 0;
 }
-
 
 template<class Type>
 inline CLockFreeQueue<Type>::~CLockFreeQueue()
 {
+	st_NODE* _pNode = m_pFront->pNode;
+	while (_pNode)
+	{
+		st_NODE *_pNext = _pNode->pNext;
+		m_FreeList.Free(_pNode);
+		_pNode = _pNext;
+		InterlockedDecrement(&m_lUseCount);
+	}
+	_aligned_free(m_pFront);
+	_aligned_free(m_pRear);
 }
 
-
 template<class Type>
-inline void CLockFreeQueue<Type>::Enqueue(Type data)
+inline void CLockFreeQueue<Type>::Enqueue(Type Data)
 {
-	st_NODE* pNewNode = _freeList.Alloc();
-	pNewNode->pNext = nullptr;
-	pNewNode->data = data;
+	st_NODE *_pNewNode = m_FreeList.Alloc();
+	_pNewNode->pNext = nullptr;
+	_pNewNode->Data = Data;
 
-	st_TIP rear;
-	rear.pNode = _pRear->pNode;
-	rear.workCount = _pRear->workCount;
+	st_TOP _NewRear;
+	_NewRear.pNode = m_pRear->pNode;
+	_NewRear.iCount = m_pRear->iCount;
 	while (1)
 	{
-		if (nullptr == rear.pNode->pNext)
+		if (nullptr == _NewRear.pNode->pNext)
 		{
-			if (nullptr == InterlockedCompareExchangePointer((PVOID*)&rear.pNode->pNext, pNewNode, nullptr))
+			if (nullptr == InterlockedCompareExchangePointer((PVOID*)&_NewRear.pNode->pNext,
+				_pNewNode, nullptr))
 			{
-				InterlockedCompareExchange128((LONG64*)_pRear, rear.workCount + 1, (LONG64)pNewNode, (LONG64*)&rear);
+				InterlockedCompareExchange128((LONG64*)m_pRear, _NewRear.iCount + 1,
+					(LONG64)_pNewNode, (LONG64*)&_NewRear);
 				break;
 			}
 		}
-
-		InterlockedCompareExchange128((LONG64*)_pRear, rear.workCount + 1, (LONG64)rear.pNode->pNext, (LONG64*)&rear);
+		InterlockedCompareExchange128((LONG64*)m_pRear, _NewRear.iCount + 1,
+			(LONG64)_NewRear.pNode->pNext, (LONG64*)&_NewRear);
 	}
-
-	InterlockedIncrement(&_useCount);
+	InterlockedIncrement(&m_lUseCount);
 }
 
-
-//지금 data는 무조건 지역변수만 가능하다. 전역변수의 경우 Interlocked으로 data를 바꿔줘야하게끔 코드를 수정해야 안전한 번거로움이 있다.
 template<class Type>
-inline BOOL CLockFreeQueue<Type>::Dequeue(Type * pData)
+inline bool CLockFreeQueue<Type>::Dequeue(Type *pData)
 {
-	if (InterlockedDecrement(&_useCount) < 0)
+	if (InterlockedDecrement(&m_lUseCount) < 0)
 	{
-		InterlockedIncrement(&_useCount);
-		return FALSE;
+		InterlockedIncrement(&m_lUseCount);
+		return false;
 	}
-
-	st_TIP front;
-	front.pNode = _pFront->pNode;
-	front.workCount = _pFront->workCount;
+	st_TOP _Front;
+	_Front.pNode = m_pFront->pNode;
+	_Front.iCount = m_pFront->iCount;
 	while (1)
 	{
-		st_NODE* pNext = front.pNode->pNext;   //반드시 이렇게 지역변수로 받아놓고 null검사를 해야 크래쉬 가능성을 없앨 수 있다.
-		if (nullptr == pNext)
+		st_NODE *_pNext = _Front.pNode->pNext;
+		if (nullptr == _pNext)
 		{
-			front.pNode = _pFront->pNode;
-			front.workCount = _pFront->workCount;
+			_Front.pNode = m_pFront->pNode;
+			_Front.iCount = m_pFront->iCount;
 			continue;
 		}
-
-		*pData = pNext->data;
-		if (InterlockedCompareExchange128((LONG64*)_pFront, front.workCount + 1, (LONG64)front.pNode->pNext, (LONG64*)&front))
+		*pData = _pNext->Data;
+		if (InterlockedCompareExchange128((LONG64*)m_pFront, _Front.iCount + 1,
+			(LONG64)_Front.pNode->pNext, (LONG64*)&_Front))
 		{
-			_freeList.Free(front.pNode);
+			m_FreeList.Free(_Front.pNode);
 			break;
 		}
 	}
-
-	return TRUE;
+	return true;
 }
-
 
 template<class Type>
 inline LONG CLockFreeQueue<Type>::GetUseCount()
 {
-	return _useCount;
+	return m_lUseCount;
 }
 
-#endif _LANSERVER_MEMORYPOOL_QUEUE_H_
+#endif _LANSERVER_MEMORY_QUEUE_H_

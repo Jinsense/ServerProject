@@ -1,341 +1,300 @@
 #include <Windows.h>
 #include <string.h>
+
 #include "RingBuffer.h"
+
 #define min(a,b) (((a) < (b)) ? (a) : (b))
-
-
 
 CRingBuffer::CRingBuffer()
 {
-	_pCS = &_cs;
-	InitializeCriticalSection(_pCS);
-
-	_front = 0;
-	_rear = 0;
+	m_pCS = &m_CS;
+	InitializeCriticalSection(m_pCS);
+	m_iFront = 0;
+	m_iRear = 0;
 }
 
-
-CRingBuffer::CRingBuffer(int bufferSize)
+CRingBuffer::CRingBuffer(int iBufferSize)
 {
-	Initialize(bufferSize);
-
-	_pCS = &_cs;
-	InitializeCriticalSection(_pCS);
-
-	_front = 0;
-	_rear = 0;
+	Initialize(iBufferSize);
+	m_pCS = &m_CS;
+	InitializeCriticalSection(m_pCS);
+	m_iFront = 0;
+	m_iRear = 0;
 }
-
 
 CRingBuffer::~CRingBuffer()
 {
-	DeleteCriticalSection(_pCS);
-
-	delete[] _pBuffer;
+	DeleteCriticalSection(m_pCS);
+	delete[] m_pBuffer;
 }
 
-
-void CRingBuffer::Initialize(int bufferSize)
+void CRingBuffer::Initialize(int iBufferSize)
 {
-	_pBuffer = new char[bufferSize];
-	_bufferSize = bufferSize;
+	m_pBuffer = new char[iBufferSize];
+	m_iBufferSize = iBufferSize;
 }
-
 
 int CRingBuffer::GetBufferSize()
 {
-	return _bufferSize;
+	return m_iBufferSize;
 }
-
 
 int CRingBuffer::GetFreeSize()
 {
-	//현재 Enqueue와는 동시 진행이 불가능한 상태
-	int front = _front;
+	int _iFront = m_iFront;
 
-	if (front <= _rear)
-		return _bufferSize - _rear + front - 1;
+	if (_iFront <= m_iRear)
+		return m_iBufferSize - m_iRear + _iFront - 1;
 	else
-		return front - _rear - 1;
+		return _iFront - m_iRear - 1;
 }
-
 
 int CRingBuffer::GetUseSize()
 {
-	//현재 Dequeue와는 동시 진행이 불가능한 상태
-	int rear = _rear;
+	int _iRear = m_iRear;
 
-	if (_front <= rear)
-		return rear - _front;
+	if (m_iFront <= _iRear)
+		return _iRear - m_iFront;
 	else
-		return rear + _bufferSize - _front;
+		return _iRear + m_iBufferSize - m_iFront;
 }
-
 
 int CRingBuffer::GetNotBrokenPushSize()
 {
-	//현재 Enqueue와는 동시 진행이 불가능한 상태
-	int front = _front;
+	int _iFront = m_iFront;
 
-	if (front <= _rear)
+	if (_iFront <= m_iRear)
 	{
-		if (0 == front)
-			return _bufferSize - _rear - 1;
+		if (0 == _iFront)
+			return m_iBufferSize - m_iRear - 1;
 		else
-			return _bufferSize - _rear;
+			return m_iBufferSize - m_iRear;
 	}
 	else
-		return front - _rear - 1;
+		return _iFront - m_iRear - 1;
 }
-
 
 int CRingBuffer::GetNotBrokenPopSize()
 {
-	//현재 Dequeue와는 동시 진행이 불가능한 상태
-	int rear = _rear;
+	int _iRear = m_iRear;
 
-	if (_front <= rear)
-		return rear - _front;
+	if (m_iFront <= _iRear)
+		return _iRear - m_iFront;
 	else
-		return _bufferSize - _front;
+		return m_iBufferSize - m_iFront;
 }
 
-
-int CRingBuffer::Enqueue(const char* pData, int dataSize)
+int CRingBuffer::Enqueue(const char *pData, int iDataSize)
 {
-	EnterCriticalSection(&_cs);
+	EnterCriticalSection(&m_CS);
 
-	int destPos = _rear + dataSize;
-	int front = _front;
+	int _iDestPos = m_iRear + iDataSize;
+	int _iFront = m_iFront;
 
-	if (front <= _rear)
+	if (_iFront <= m_iRear)
 	{
-		if (destPos < _bufferSize)
+		if (_iDestPos < m_iBufferSize)
 		{
-			memcpy_s(&_pBuffer[_rear], dataSize, pData, dataSize);
-			_rear += dataSize;
+			memcpy_s(&m_pBuffer[m_iRear], iDataSize, pData, iDataSize);
+			m_iRear += iDataSize;
 		}
 		else
 		{
-			int firstSize = _bufferSize - _rear;
-			int secondSize = destPos - _bufferSize;
-			int newRear;
+			int _iFirstSize = m_iBufferSize - m_iRear;
+			int _iSecondSize = _iDestPos - m_iBufferSize;
+			int _iNewRear;
 
-			//어떤 상황에서도 항상 빈 칸 하나는 남겨놓는다.
-			if (front <= secondSize)
+			if (_iFront <= _iSecondSize)
 			{
-				if (0 == front)
+				if (0 == _iFront)
 				{
-					dataSize -= secondSize + 1;
-					secondSize = 0;
-					firstSize--;
-
-					newRear = _rear + firstSize;
+					iDataSize -= _iSecondSize + 1;
+					_iSecondSize = 0;
+					_iFirstSize--;
+					_iNewRear = m_iRear + _iFirstSize;
 				}
 				else
 				{
-					secondSize = front - 1;
-					dataSize = firstSize + secondSize;
-
-					newRear = secondSize;
+					_iSecondSize = _iFront - 1;
+					iDataSize = _iFirstSize + _iSecondSize;
+					_iNewRear = _iSecondSize;
 				}
 			}
 			else
-				newRear = secondSize;
-
-			memcpy_s(&_pBuffer[_rear], firstSize, pData, firstSize);
-			memcpy_s(_pBuffer, secondSize, &pData[firstSize], secondSize);
-
-			_rear = newRear;
+				_iNewRear = _iSecondSize;
+			memcpy_s(&m_pBuffer[m_iRear], _iFirstSize, pData, _iFirstSize);
+			memcpy_s(m_pBuffer, _iSecondSize, &pData[_iFirstSize], _iSecondSize);
+			m_iRear = _iNewRear;
 		}
 	}
 	else
 	{
-		//어떤 상황에서도 항상 빈 칸 하나는 남겨놓는다.
-		if (front <= destPos)
-			dataSize -= (destPos - front) + 1;
+		if (_iFront <= _iDestPos)
+			iDataSize -= (_iDestPos - _iFront) + 1;
 
-		memcpy_s(&_pBuffer[_rear], dataSize, pData, dataSize);
-		_rear += dataSize;
+		memcpy_s(&m_pBuffer[m_iRear], iDataSize, pData, iDataSize);
+		m_iRear += iDataSize;
 	}
 
-	LeaveCriticalSection(&_cs);
-	return dataSize;
+	LeaveCriticalSection(&m_CS);
+	return iDataSize;
 }
 
-
-int CRingBuffer::Dequeue(char* pData, int dataSize)
+int CRingBuffer::Dequeue(char *pData, int iDataSize)
 {
-	EnterCriticalSection(&_cs);
+	EnterCriticalSection(&m_CS);
 
-	int destPos = _front + dataSize;
-	int rear = _rear;
+	int _iDsetPos = m_iFront + iDataSize;
+	int _iRear = m_iRear;
 
-	if (_front <= rear)
+	if (m_iFront <= _iRear)
 	{
-		if (rear < destPos)
-			dataSize -= destPos - rear;
-
-		memcpy_s(pData, dataSize, &_pBuffer[_front], dataSize);
-		_front += dataSize;
+		if (_iRear < _iDsetPos)
+			iDataSize -= _iDsetPos - _iRear;
+		memcpy_s(pData, iDataSize, &m_pBuffer[m_iFront], iDataSize);
+		m_iFront += iDataSize;
 	}
 	else
 	{
-		if (destPos < _bufferSize)
+		if (_iDsetPos < m_iBufferSize)
 		{
-			memcpy_s(pData, dataSize, &_pBuffer[_front], dataSize);
-			_front += dataSize;
+			memcpy_s(pData, iDataSize, &m_pBuffer[m_iFront], iDataSize);
+			m_iFront += iDataSize;
 		}
 		else
 		{
-			int firstSize = _bufferSize - _front;
-			int secondSize = destPos - _bufferSize;
+			int _iFirstSize = m_iBufferSize - m_iFront;
+			int _iSecondSize = _iDsetPos - m_iBufferSize;
 
-			if (rear < secondSize)
+			if (_iRear < _iSecondSize)
 			{
-				secondSize = rear;
-				dataSize = firstSize + secondSize;
+				_iSecondSize = _iRear;
+				iDataSize = _iFirstSize + _iSecondSize;
 			}
-
-			memcpy_s(pData, firstSize, &_pBuffer[_front], firstSize);
-			memcpy_s(&pData[firstSize], secondSize, _pBuffer, secondSize);
-
-			_front = secondSize;
+			memcpy_s(pData, _iFirstSize, &m_pBuffer[m_iFront], _iFirstSize);
+			memcpy_s(&pData[_iFirstSize], _iSecondSize, m_pBuffer, _iSecondSize);
+			m_iFront = _iSecondSize;
 		}
 	}
 
-	LeaveCriticalSection(&_cs);
-	return dataSize;
+	LeaveCriticalSection(&m_CS);
+	return iDataSize;
 }
 
-
-int CRingBuffer::Enqueue(int dataSize)
+int CRingBuffer::Enqueue(int iDataSize)
 {
-	EnterCriticalSection(&_cs);
+	EnterCriticalSection(&m_CS);
 
-	int destPos = _rear + dataSize;
-	int front = _front;
+	int _iDestPos = m_iRear + iDataSize;
+	int _iFront = m_iFront;
 
-	if (front <= _rear)
+	if (_iFront <= m_iRear)
 	{
-		if (destPos < _bufferSize)
-			_rear += dataSize;
+		if (_iDestPos < m_iBufferSize)
+			m_iRear += iDataSize;
 		else
 		{
-			int firstSize = _bufferSize - _rear;
-			int secondSize = destPos - _bufferSize;
-			int newRear;
+			int _iFirstSize = m_iBufferSize - m_iRear;
+			int _iSecondSize = _iDestPos - m_iBufferSize;
+			int _iNewRear;
 
-			//어떤 상황에서도 항상 빈 칸 하나는 남겨놓는다.
-			if (front <= secondSize)
+			if (_iFront <= _iSecondSize)
 			{
-				if (0 == front)
+				if (0 == _iFront)
 				{
-					dataSize -= secondSize + 1;
-					secondSize = 0;
-					firstSize--;
-
-					newRear = _rear + firstSize;
+					iDataSize -= _iSecondSize + 1;
+					_iSecondSize = 0;
+					_iFirstSize--;
+					_iNewRear = m_iRear + _iFirstSize;
 				}
 				else
 				{
-					secondSize = front - 1;
-					dataSize = firstSize + secondSize;
-
-					newRear = secondSize;
+					_iSecondSize = _iFront - 1;
+					iDataSize = _iFirstSize + _iSecondSize;
+					_iNewRear = _iSecondSize;
 				}
 			}
 			else
-				newRear = secondSize;
+				_iNewRear = _iSecondSize;
 
-			_rear = newRear;
+			m_iRear = _iNewRear;
 		}
 	}
 	else
 	{
-		//어떤 상황에서도 항상 빈 칸 하나는 남겨놓는다.
-		if (front <= destPos)
-			dataSize -= (destPos - front) + 1;
-
-		_rear += dataSize;
+		if (_iFront <= _iDestPos)
+			iDataSize -= (_iDestPos - _iFront) + 1;
+		m_iRear += iDataSize;
 	}
 
-	LeaveCriticalSection(&_cs);
-	return dataSize;
+	LeaveCriticalSection(&m_CS);
+	return iDataSize;
 }
 
-
-int CRingBuffer::Dequeue(int dataSize)
+int CRingBuffer::Dequeue(int iDataSize)
 {
-	EnterCriticalSection(&_cs);
+	EnterCriticalSection(&m_CS);
 
-	int destPos = _front + dataSize;
-	int rear = _rear;
+	int iDestPos = m_iFront + iDataSize;
+	int _iRear = m_iRear;
 
-	if (_front <= rear)
+	if (m_iFront <= _iRear)
 	{
-		if (rear < destPos)
-			dataSize -= destPos - rear;
+		if (_iRear < iDestPos)
+			iDataSize -= iDestPos - _iRear;
 
-		_front += dataSize;
+		m_iFront += iDataSize;
 	}
 	else
 	{
-		if (destPos < _bufferSize)
-			_front += dataSize;
+		if (iDestPos < m_iBufferSize)
+			m_iFront += iDataSize;
 		else
 		{
-			int firstSize = _bufferSize - _front;
-			int secondSize = destPos - _bufferSize;
+			int _iFirstSize = m_iBufferSize - m_iFront;
+			int _iSecondSize = iDestPos - m_iBufferSize;
 
-			if (rear < secondSize)
+			if (_iRear < _iSecondSize)
 			{
-				secondSize = rear;
-				dataSize = firstSize + secondSize;
+				_iSecondSize = _iRear;
+				iDataSize = _iFirstSize + _iSecondSize;
 			}
-
-			_front = secondSize;
+			m_iFront = _iSecondSize;
 		}
 	}
 
-	LeaveCriticalSection(&_cs);
-	return dataSize;
+	LeaveCriticalSection(&m_CS);
+	return iDataSize;
 }
 
-
-int CRingBuffer::Peek(char* pData, int dataSize)
+int CRingBuffer::Peek(char *pData, int iDataSize)
 {
-	dataSize = min(dataSize, GetUseSize());
+	iDataSize = min(iDataSize, GetUseSize());
+	int _iDestPos = m_iFront + iDataSize;
 
-	int destPos = _front + dataSize;
-
-	if (_front <= _rear)
-		memcpy_s(pData, dataSize, &_pBuffer[_front], dataSize);
+	if (m_iFront <= m_iRear)
+		memcpy_s(pData, iDataSize, &m_pBuffer[m_iFront], iDataSize);
 	else
 	{
-		if (destPos < _bufferSize)
-			memcpy_s(pData, dataSize, &_pBuffer[_front], dataSize);
+		if (_iDestPos < m_iBufferSize)
+			memcpy_s(pData, iDataSize, &m_pBuffer[m_iFront], iDataSize);
 		else
 		{
-			int firstSize = _bufferSize - _front;
-			int secondSize = destPos - _bufferSize;
-
-			memcpy_s(pData, firstSize, &_pBuffer[_front], firstSize);
-			memcpy_s(&pData[firstSize], secondSize, _pBuffer, secondSize);
+			int firstSize = m_iBufferSize - m_iFront;
+			int secondSize = _iDestPos - m_iBufferSize;
+			memcpy_s(pData, firstSize, &m_pBuffer[m_iFront], firstSize);
+			memcpy_s(&pData[firstSize], secondSize, m_pBuffer, secondSize);
 		}
 	}
-
-	return dataSize;
+	return iDataSize;
 }
-
 
 void CRingBuffer::Lock()
 {
-	EnterCriticalSection(_pCS);
+	EnterCriticalSection(m_pCS);
 }
-
 
 void CRingBuffer::Unlock()
 {
-	LeaveCriticalSection(_pCS);
+	LeaveCriticalSection(m_pCS);
 }

@@ -1,156 +1,165 @@
-#ifndef _LANSERVER_MEMORYPOOL_TLS_H_
-#define _LANSERVER_MEMORYPOOL_TLS_H_
+#ifndef _LANSERVER_MEMORY_TLS_H_
+#define _LANSERVER_MEMORY_TLS_H_
 
 #include <Windows.h>
 #include <stack>
+
 #include "MemoryPool.h"
+
 using namespace std;
 
 template<class Type>
 class CMemoryPool_TLS
 {
 private:
-	enum en_BLOCK
+	enum class en_BLOCK
 	{
-		eNUM_CHUNKBLOCK = 300,
-		eNUM_DEFAULT = 10,
+		CHUNKBLOCK = 300,
+		DEFAULT = 10,
 	};
 
 	class CChunk
 	{
 		struct st_BLOCK
 		{
-			CChunk * pChunkBlock;
-			Type data;
+			CChunk *pChunkBlock;
+			Type Data;
+
+			st_BLOCK() :
+				pChunkBlock(nullptr)
+			{}
 		};
 
 	public:
-		CChunk() : _pEnd((st_BLOCK*)((char*)_arBlock + sizeof(CChunk*) + (sizeof(st_BLOCK) * eNUM_CHUNKBLOCK)))
+		CChunk() : m_pEnd((st_BLOCK*)((char*)m_Block + sizeof(CChunk*)
+			+ (sizeof(st_BLOCK) * static_cast<int>(en_BLOCK::CHUNKBLOCK))))
 		{
-			for (auto i = 0; i < eNUM_CHUNKBLOCK; i++)
+			for (int i = 0; i < static_cast<int>(en_BLOCK::CHUNKBLOCK); i++)
 			{
-				_arBlock[i].pChunkBlock = this;
+				m_Block[i].pChunkBlock = this;
 			}
 		}
 		void Initialize()
 		{
-			_pTop = (st_BLOCK*)((char*)_arBlock + sizeof(CChunk*));
-			_RefCount = eNUM_CHUNKBLOCK;
+			m_pTop = (st_BLOCK*)((char*)m_Block + sizeof(CChunk*));
+			m_lRefCount = static_cast<int>(en_BLOCK::CHUNKBLOCK);
 		}
 
-	private:
-		st_BLOCK _arBlock[eNUM_CHUNKBLOCK];
 	public:
-		const st_BLOCK * const	_pEnd;
-		st_BLOCK *				_pTop;
+		const st_BLOCK	*const	m_pEnd;
+		st_BLOCK				*m_pTop;
+		long					m_lRefCount;
 
-		long _RefCount;
+	private:
+		st_BLOCK m_Block[en_BLOCK::CHUNKBLOCK];
+
 		friend class CMemoryPool_TLS;
 	};
 
 public:
 	CMemoryPool_TLS()
 	{
-		TLSIndex = TlsAlloc();
-		UseCount = 0;
-		AllocCount = eNUM_DEFAULT;
-		InitializeCriticalSection(&_cs);
-		for (auto i = 0; i < eNUM_DEFAULT; i++)
+		m_dwTlsIndex = TlsAlloc();
+		m_lUseCount = 0;
+		m_lAllocCount = static_cast<int>(en_BLOCK::DEFAULT);
+		InitializeCriticalSection(&m_CS);
+		for (int i = 0; i < static_cast<int>(en_BLOCK::DEFAULT); i++)
 		{
-			CChunk * pChunk = new CChunk;
-			_ChunkStack.push(pChunk);
+			CChunk *_pChunk = new CChunk;
+			m_ChunkStack.push(_pChunk);
 		}
-
 	}
 	~CMemoryPool_TLS()
 	{
-		while (FALSE == _ChunkStack.empty())
+		while (false == m_ChunkStack.empty())
 		{
-			CChunk * pChunk = _ChunkStack.top();
-			_ChunkStack.pop();
-			delete pChunk;
+			CChunk *_pChunk = m_ChunkStack.top();
+			m_ChunkStack.pop();
+			delete _pChunk;
 		}
-		TlsFree(TLSIndex);
+		TlsFree(m_dwTlsIndex);
 	}
-
 
 	Type * Alloc()
 	{
-		InterlockedIncrement(&UseCount);
+		InterlockedIncrement(&m_lUseCount);
 
-		CChunk * pChunk;
+		CChunk *_pChunk;
 
-		if (TlsGetValue(TLSIndex) == NULL)
+		if (TlsGetValue(m_dwTlsIndex) == NULL)
 		{
-			pChunk = ChunkAlloc();
-			pChunk->Initialize();
-			TlsSetValue(TLSIndex, pChunk);
+			_pChunk = ChunkAlloc();
+			_pChunk->Initialize();
+			TlsSetValue(m_dwTlsIndex, _pChunk);
 		}
 		else
-			pChunk = (CChunk*)TlsGetValue(TLSIndex);
+			_pChunk = (CChunk*)TlsGetValue(m_dwTlsIndex);
 
-		Type * Packet = (Type*)(pChunk->_pTop);
+		Type *_pPacket = (Type*)(_pChunk->m_pTop);
+		_pChunk->m_pTop = _pChunk->m_pTop++;
 
-		pChunk->_pTop = pChunk->_pTop++;
+		if (_pChunk->m_pTop == _pChunk->m_pEnd)
+			TlsSetValue(m_dwTlsIndex, NULL);
 
-		if (pChunk->_pTop == pChunk->_pEnd)
-			TlsSetValue(TLSIndex, NULL);
-
-
-		return Packet;
+		return _pPacket;
 	}
 
-	void Free(Type* pData)
+	void Free(Type *pData)
 	{
-		InterlockedDecrement(&UseCount);
-		CChunk::st_BLOCK * pBlock = (CChunk::st_BLOCK *)((char*)pData - sizeof(CChunk*));
-		CChunk * pChunk = pBlock->pChunkBlock;
-		if (0 == InterlockedDecrement(&pChunk->_RefCount))
+		InterlockedDecrement(&m_lUseCount);
+
+		CChunk::st_BLOCK *_pBlock = (CChunk::st_BLOCK *)((char*)pData - sizeof(CChunk*));
+		CChunk *_pChunk = _pBlock->pChunkBlock;
+
+		if (0 == InterlockedDecrement(&_pChunk->m_lRefCount))
 		{
-			ChunkFree(pChunk);
+			ChunkFree(_pChunk);
 		}
 		return;
 	}
 
 	CChunk* ChunkAlloc()
 	{
-		EnterCriticalSection(&_cs);
-		CChunk * pChunk;
-		if (TRUE == _ChunkStack.empty())
+		EnterCriticalSection(&m_CS);
+		CChunk *_pChunk;
+		if (true == m_ChunkStack.empty())
 		{
-			pChunk = new CChunk;
-			InterlockedIncrement(&AllocCount);
+			_pChunk = new CChunk;
+			InterlockedIncrement(&m_lAllocCount);
 		}
 		else
 		{
-			pChunk = _ChunkStack.top();
-			_ChunkStack.pop();
+			_pChunk = m_ChunkStack.top();
+			m_ChunkStack.pop();
 		}
-		LeaveCriticalSection(&_cs);
-		return pChunk;
+		LeaveCriticalSection(&m_CS);
+		return _pChunk;
 	}
 
-	void ChunkFree(CChunk* pChunk)
+	void ChunkFree(CChunk *pChunk)
 	{
-		EnterCriticalSection(&_cs);
-		_ChunkStack.push(pChunk);
-		LeaveCriticalSection(&_cs);
-
+		EnterCriticalSection(&m_CS);
+		m_ChunkStack.push(pChunk);
+		LeaveCriticalSection(&m_CS);
 		return;
 	}
 
-	long		GetUseCount() { return UseCount; }
-	long		GetAllocCount() { return (AllocCount * eNUM_CHUNKBLOCK); }
+	long	GetUseCount() { return m_lUseCount; }
+	long	GetAllocCount()
+	{
+		return (m_lAllocCount *
+			static_cast<int>(en_BLOCK::CHUNKBLOCK));
+	}
 
 private:
-	DWORD	TLSIndex;
-	long	UseCount;
-	long	AllocCount;
+	DWORD	m_dwTlsIndex;
+	long	m_lUseCount;
+	long	m_lAllocCount;
 
-	stack<CChunk*> _ChunkStack;
-	CRITICAL_SECTION _cs;
+	std::stack<CChunk*> m_ChunkStack;
+	CRITICAL_SECTION m_CS;
 
 	friend class CChunk;
 };
 
-#endif _LANSERVER_MEMORYPOOL_TLS_H_
+#endif _LANSERVER_MEMORY_TLS_H_
