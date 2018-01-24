@@ -18,10 +18,10 @@
 #define df_MAX_CLINET_NUM		2000
 #define df_MAX_WSABUF_NUM		100
 #define df_MAX_QUEUE_SIZE		10000
-#define df_HEADER_SZIE			2
+#define df_HEADER_SIZE			2
 
-#define df_SET_INDEX(Index, Sessionkey)	Index = Index << 48; SessionKey = Index | SessionKey;
-#define df_GET_INDEX(Index, SessionKey) Index = SessionKey >> 48;
+#define	df_SET_INDEX(Index, SessionKey)		Index = Index << 48; SessionKey = Index | SessionKey;
+#define df_GET_INDEX(Index, SessionKey)		Index = SessionKey >> 48;
 
 typedef struct st_SessionInfo
 {
