@@ -55,7 +55,7 @@ void CLanServer::Disconnect(ULONG64 sessionkey)
 	return;
 }
 
-bool CLanServer::ServerStart(WCHAR *pOpenIP, int port, int maxworkerthread,
+bool CLanServer::ServerStart(const WCHAR *pOpenIP, int port, int maxworkerthread,
 	bool bNodelay, int maxsession)
 {
 	wprintf(L"[Server :: ServerStart] Start\n");
@@ -672,13 +672,13 @@ bool CLanServer::OnRecv(SESSION *pSession, CPacket *pPacket)
 	LONG64 data = 0;
 	*pPacket >> data;
 
-	CPacket *pPacket = CPacket::Alloc();
-	*pPacket << data;
+	CPacket *pNewpacket = CPacket::Alloc();
+	*pNewpacket << data;
 
 	bool retval = false;
 	if (pSession->bRelease == false)
-		retval = SendPacket(pSession->sessionkey, pPacket);
-	pPacket->Free();
+		retval = SendPacket(pSession->sessionkey, pNewpacket);
+	pNewpacket->Free();
 
 	return retval;
 }

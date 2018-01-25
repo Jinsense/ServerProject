@@ -62,7 +62,7 @@ typedef struct st_Session
 
 class CLanServer
 {
-protected:
+public:
 	CLanServer();
 	~CLanServer();
 
@@ -72,7 +72,7 @@ protected:
 	virtual void	OnConnectionRequest(WCHAR *pClientIP, int port) = 0;
 	virtual void	OnError(int errorcode, WCHAR *pError) = 0;
 
-	bool	ServerStart(WCHAR *pOpenIP, int port, int maxworkerthread,
+	bool	ServerStart(const WCHAR *pOpenIP, int port, int maxworkerthread,
 				bool bNodelay, int maxsession);
 	bool	ServerStop();
 	bool	SendPacket(ULONG64 sessionkey, CPacket *pPacket);

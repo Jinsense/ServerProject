@@ -10,7 +10,7 @@ CLanServerMonitor::~CLanServerMonitor()
 
 }
 
-void CLanServerMonitor::OnClientJoin(SESSION *pInfo)
+void CLanServerMonitor::OnClientJoin(INFO *pInfo)
 {
 	CPacket *pPacket = CPacket::Alloc();
 	__int64 data = 0x7fffffffffffffff;

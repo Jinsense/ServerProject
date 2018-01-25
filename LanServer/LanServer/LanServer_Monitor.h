@@ -5,10 +5,11 @@
 
 class CLanServerMonitor : public CLanServer
 {
+public:
 	CLanServerMonitor();
 	~CLanServerMonitor();
 
-	virtual void	OnClientJoin(SESSION *pInfo);
+	virtual void	OnClientJoin(INFO *pInfo);
 	virtual void	OnClientLeave(ULONG64 sessionkey);
 	virtual void	OnConnectionRequest(WCHAR *pClientIP, int port);
 	virtual void	OnError(int errorcode, WCHAR *pError);
