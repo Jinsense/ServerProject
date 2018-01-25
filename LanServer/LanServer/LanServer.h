@@ -62,11 +62,10 @@ typedef struct st_Session
 
 class CLanServer
 {
-private:
+protected:
 	CLanServer();
 	~CLanServer();
 
-protected:
 	void	Disconnect(ULONG64 sessionkey);
 	virtual void	OnClientJoin(INFO *pInfo) = 0;
 	virtual void	OnClientLeave(ULONG64 sessionkey) = 0;
