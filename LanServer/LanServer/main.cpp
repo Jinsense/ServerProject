@@ -1,52 +1,51 @@
-#include <conio.h>
-
 #include "LanServer_Monitor.h"
+
+#include <conio.h>
 
 int main()
 {
-	int retval = 0;
-	int in = 0;
+	int _Retval;
+	int _In;
 
-	CLanServerMonitor server;
-	const WCHAR *pOpenIP = L"0.0.0.0";
-	SYSTEM_INFO sysinfo;
+	CLanServerMonitor _Server;
+	SYSTEM_INFO _SysInfo;
+	const WCHAR *pIP = L"0.0.0.0";
 
-	GetSystemInfo(&sysinfo);
-
-	if (false == (retval = server.ServerStart(pOpenIP, 6000,
-		sysinfo.dwNumberOfProcessors * 2, true, df_MAX_CLINET_NUM)))
+	GetSystemInfo(&_SysInfo);
+	
+	if ((_Retval = _Server.ServerStart(pIP, 6000, 
+				_SysInfo.dwNumberOfProcessors * 2, true, 
+				MAX_CLIENT_NUMBER)) == false)
 	{
-		wprintf(L"[Server :: ServerStart] Error\n");
+		wprintf(L"[Server :: Server_Start] Error\n");
 		return 0;
 	}
 
-	while (1)
+	while (!_Server.GetShutDownMode())
 	{
-		in = _getch();
-		switch (in)
+		_In = _getch();
+		switch (_In)
 		{
 		case 'q': case 'Q':
 		{
+			_Server.SetShutDownMode(true);
 			wprintf(L"[Main] 서버를 종료합니다.\n");
 			_getch();
+			break;
 		}
-		break;
-		case 'm': case'M':
+		case 'm': case 'M':
 		{
-			if (false == server.GetMonitorMode())
+			if (false == _Server.GetMonitorMode())
 			{
-				server.SetMonitorMode(true);
+				_Server.SetMonitorMode(true);
 				wprintf(L"[Main] MonitorMode Start\n");
 			}
 			else
 			{
-				server.SetMonitorMode(false);
+				_Server.SetMonitorMode(false);
 				wprintf(L"[Main] MonitorMode Stop\n");
 			}
 		}
-		break;
-		default:
-			break;
 		}
 	}
 	return 0;

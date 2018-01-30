@@ -1,7 +1,7 @@
 #include <WinSock2.h>
-#include <Windows.h>
+#include <windows.h>
 #include <wchar.h>
-#include <WS2tcpip.h>
+#include <Ws2tcpip.h>
 #include <process.h>
 #include <time.h>
 #include <iostream>
@@ -12,21 +12,21 @@ using namespace std;
 
 CLanServer::CLanServer()
 {
-	_pCompare = nullptr;
-	_pSessionarray = nullptr;
-	_pIndex = nullptr;
-	_listensock = INVALID_SOCKET;
-
-	_bWhiteipmode = false;
-	_bShutdown = false;
-	_bMonitorflag = true;
-	_allthreadcnt = 0;
-	_sessionkeycnt = 1;
-	_accepttps = 0;
-	_accepttotal = 0;
-	_recvpackettps = 0;
-	_sendpackettps = 0;
-	_connectclient = 0;
+	pIOCompare = nullptr;
+	pSessionArray = nullptr;
+	m_listensock = INVALID_SOCKET;
+	
+	m_bWhiteIPMode = false;
+	m_bShutdown = false;
+	m_bMonitorFlag = true;
+	m_iAllThreadCnt = 0;
+	pIndex = nullptr;
+	m_iSessionKeyCnt = 1;
+	m_iAcceptTPS = 0;
+	m_iAcceptTotal = 0;
+	m_iRecvPacketTPS = 0;
+	m_iSendPacketTPS = 0;
+	m_iConnectClient = 0;
 }
 
 CLanServer::~CLanServer()
@@ -34,473 +34,430 @@ CLanServer::~CLanServer()
 
 }
 
-void CLanServer::Disconnect(ULONG64 sessionkey)
+bool CLanServer::ServerStart(const WCHAR *pOpenIP, int iPort, int iMaxWorkerThread,
+					bool bNodelay, int iMaxSession)
 {
-	ULONG64 Index = sessionkey >> 48;
-	SESSION *pSession = &_pSessionarray[Index];
+	wprintf(L"[Server :: Server_Start]	Start\n");
 
-	InterlockedIncrement(&pSession->iocount);
-
-	if (true == pSession->bRelease || sessionkey != pSession->sessionkey)
-	{
-		if (0 == InterlockedDecrement(&(pSession->iocount)))
-			ClientRelease(pSession);
-		return;
-	}
-	shutdown(pSession->sock, SD_BOTH);
-
-	if (0 == InterlockedDecrement(&(pSession->iocount)))
-		ClientRelease(pSession);
-
-	return;
-}
-
-bool CLanServer::ServerStart(const WCHAR *pOpenIP, int port, int maxworkerthread,
-	bool bNodelay, int maxsession)
-{
-	wprintf(L"[Server :: ServerStart] Start\n");
-
-	int retval = 0;
+	int _iRetval = 0;
 	setlocale(LC_ALL, "Korean");
-	InitializeCriticalSection(&_sessioncs);
+	InitializeCriticalSection(&m_SessionCS);
 
 	CPacket::MemoryPoolInit();
 
-	_pCompare = (COMPARE*)_aligned_malloc(sizeof(COMPARE), 16);
-	_pCompare->iocount = 0;
-	_pCompare->releaseflag = false;
+	pIOCompare = (st_IO_RELEASE_COMPARE*)_aligned_malloc(sizeof(st_IO_RELEASE_COMPARE), 16);
+	pIOCompare->iIOCount = 0;
+	pIOCompare->iReleaseFlag = false;
 
-	_pSessionarray = new SESSION[maxsession];
-
-	for (int i = 0; i < maxsession; i++)
+	pSessionArray = new st_Session[iMaxSession];
+	
+	for (int i = 0; i < iMaxSession; i++)
 	{
-		_pSessionarray[i].iocount = 0;
-		_pSessionarray[i].sock = INVALID_SOCKET;
-		_pSessionarray[i].sendcount = 0;
-		_pSessionarray[i].sessionkey = NULL;
-		_pSessionarray[i].sendflag = true;
-		_pSessionarray[i].bLoginflag = false;
-		_pSessionarray[i].bRelease = false;
+		pSessionArray[i].lIOCount = 0;
+		pSessionArray[i].sock = INVALID_SOCKET;
+		pSessionArray[i].lSendCount = 0;
+		pSessionArray[i].iSessionKey = NULL;
+		pSessionArray[i].lSendFlag = true;
+		pSessionArray[i].bLoginFlag = false;
+		pSessionArray[i].bRelease = false;
 	}
 
-	_pIndex = new unsigned int[maxsession];
-
-	for (unsigned int i = 0; i < maxsession; i++)
+	pIndex = new unsigned __int64[iMaxSession];
+	for (unsigned __int64 i = 0; i < iMaxSession; i++)
 	{
-		_pIndex[i] = i;
-		_sessionstack.Push(&_pIndex[i]);
+		pIndex[i] = i;
+		SessionStack.Push(&pIndex[i]);
 	}
 
-	if ((retval = ServerInit()) == false)
-		return false;
-
-	struct sockaddr_in server_addr;
-	ZeroMemory(&server_addr, sizeof(server_addr));
-	server_addr.sin_family = AF_INET;
-	InetPton(AF_INET, pOpenIP, &server_addr.sin_addr);
-	server_addr.sin_port = htons(port);
-
-	retval = ::bind(_listensock, (sockaddr*)&server_addr, sizeof(server_addr));
-	if (retval == SOCKET_ERROR)
+	if ((_iRetval = ServerInit()) == false)
 	{
-		wprintf(L"[Server :: ServerStart] bind Error\n");
 		return false;
 	}
 
-	retval = listen(_listensock, SOMAXCONN);
-	if (retval == SOCKET_ERROR)
+	struct sockaddr_in _server_addr;
+	ZeroMemory(&_server_addr, sizeof(_server_addr));
+	_server_addr.sin_family = AF_INET;
+	InetPton(AF_INET, pOpenIP, &_server_addr.sin_addr);
+	_server_addr.sin_port = htons(iPort);
+
+	_iRetval = ::bind(m_listensock, (sockaddr *)&_server_addr, sizeof(_server_addr));
+	if (_iRetval == SOCKET_ERROR)
 	{
-		wprintf(L"[Server :: ServerStart] listen Error\n");
 		return false;
 	}
 
-	_hAcceptThread = (HANDLE)_beginthreadex(NULL, 0, &AcceptThread,
-		(LPVOID)this, 0, NULL);
-	_hAllThread[_allthreadcnt++] = _hAcceptThread;
-	wprintf(L"[Server :: ServerStart] AcceptThread Creat\n");
-
-	for (int i = 0; i < maxworkerthread; i++)
+	_iRetval = listen(m_listensock, SOMAXCONN);
+	if (_iRetval == SOCKET_ERROR)
 	{
-		_hWorkerThread[i] = (HANDLE)_beginthreadex(NULL, 0, &WorkerThread,
-			(LPVOID)this, 0, NULL);
-		_hAllThread[_allthreadcnt++] = _hWorkerThread[i];
+		return false;
 	}
-	wprintf(L"[Server :: ServerStart] WorkerThread Create\n");
 
-	_hMonitorThread = (HANDLE)_beginthreadex(NULL, 0, &MonitorThread,
-		(LPVOID)this, 0, NULL);
-	_hAllThread[_allthreadcnt++] = _hMonitorThread;
+	m_hAcceptThread = (HANDLE)_beginthreadex(NULL, 0, &AcceptThread, 
+					(LPVOID)this, 0, NULL);
+	m_hAllthread[m_iAllThreadCnt++] = m_hAcceptThread;
+	wprintf(L"[Server :: Server_Start]	AcceptThread Create\n");
 
-	wprintf(L"[Server :: ServerStart]	MonitorThread Create\n");
-	wprintf(L"[Server :: ServerStart]	Complete\n");
+	for (int i = 0; i < iMaxWorkerThread; i++)
+	{
+		m_hWorkerThread[i] = (HANDLE)_beginthreadex(NULL, 0, &WorkerThread, 
+						(LPVOID)this, 0, NULL);
+		m_hAllthread[m_iAllThreadCnt++] = m_hWorkerThread[i];
+	}
+	wprintf(L"[Server :: Server_Start]	WorkerThread Create\n");
+
+	m_hMonitorThread = (HANDLE)_beginthreadex(NULL, 0, &MonitorThread, 
+						(LPVOID)this, 0, NULL);
+	m_hAllthread[m_iAllThreadCnt++] = m_hMonitorThread;
+	wprintf(L"[Server :: Server_Start]	MonitorThread Create\n");
+	wprintf(L"[Server :: Server_Start]	Complete\n");
 	return true;
 }
 
 bool CLanServer::ServerStop()
 {
-	//	ServerStart에서 동적할당 해준 모든 멤버변수에 대해 반환작업
-	//	그 외에 서버 재가동을 위해 필요한 셋팅 추가
-	//	Accept, Worker, Monitor 스레드 중단
-	wprintf(L"[Server :: ServerStop]	Start\n");
+	wprintf(L"[Server :: Server_Stop]	Start\n");
 
-	_bShutdown = true;
+	m_bWhiteIPMode = true;
+	_aligned_free(pIOCompare);
+	delete pSessionArray;
+	delete pIndex;
 
-	PostQueuedCompletionStatus(_hIOCP, 0, 0, 0);
-	WaitForMultipleObjects(_allthreadcnt, _hAllThread, true, INFINITE);
-
-	while (0 != _sessionstack.GetUseCount())
-	{
-		unsigned int *pIndex = nullptr;
-		_sessionstack.Pop(&pIndex);
-	}
-
-	_aligned_free(_pCompare);
-	delete _pSessionarray;
-	delete _pIndex;
-
-	WSACleanup();
-
-	_listensock = INVALID_SOCKET;
-
-	_bWhiteipmode = false;
-	_allthreadcnt = 0;
-	_sessionkeycnt = 1;
-	_accepttps = 0;
-	_accepttotal = 0;
-	_recvpackettps = 0;
-	_sendpackettps = 0;
-	_connectclient = 0;
-
-	wprintf(L"[Server :: ServerStop]	Complete\n");
+	wprintf(L"([Server :: Server_Stop]	Complete\n");
 	return true;
 }
 
-bool CLanServer::SendPacket(ULONG64 sessionkey, CPacket *pPacket)
+void CLanServer::Disconnect(unsigned __int64 iSessionKey)
 {
-	ULONG64 index = df_GET_INDEX(index, sessionkey);
+	unsigned __int64  _iIndex = iSessionKey >> 48;
+	st_Session *_pSession = &pSessionArray[_iIndex];
 
-	if (1 == InterlockedIncrement(&_pSessionarray[index].iocount))
+	InterlockedIncrement(&_pSession->lIOCount);
+
+	if (true == _pSession->bRelease || iSessionKey != _pSession->iSessionKey)
 	{
-		if (0 == InterlockedDecrement(&_pSessionarray[index].iocount))
-			ClientRelease(&_pSessionarray[index]);
+		if (0 == InterlockedDecrement(&_pSession->lIOCount))
+			ClientRelease(_pSession);
+		return;
+	}
+	shutdown(_pSession->sock, SD_BOTH);
+
+	if (0 == InterlockedDecrement(&_pSession->lIOCount))
+		ClientRelease(_pSession);
+
+	return;
+}
+
+unsigned __int64 CLanServer::GetClientCount()
+{
+	return m_iConnectClient;
+}
+
+bool CLanServer::SendPacket(unsigned __int64 iSessionKey, CPacket *pPacket)
+{
+	unsigned __int64 _iIndex = GET_INDEX(_iIndex, iSessionKey);
+
+	if( 1 == InterlockedIncrement(&pSessionArray[_iIndex].lIOCount))
+	{
+		if (0 == InterlockedDecrement(&pSessionArray[_iIndex].lIOCount))
+		{
+			ClientRelease(&pSessionArray[_iIndex]);
+		}
+		return false;
+	}
+	
+	if (true == pSessionArray[_iIndex].bRelease)
+	{
+		if (0 == InterlockedDecrement(&pSessionArray[_iIndex].lIOCount))
+		{
+			ClientRelease(&pSessionArray[_iIndex]);
+		}
 		return false;
 	}
 
-	if (true == _pSessionarray[index].bRelease)
+	if (pSessionArray[_iIndex].iSessionKey == iSessionKey)
 	{
-		if (0 == InterlockedDecrement(&_pSessionarray[index].iocount))
-			ClientRelease(&_pSessionarray[index]);
-		return false;
-	}
-
-	if (_pSessionarray[index].sessionkey == sessionkey)
-	{
-		if (_pSessionarray[index].bLoginflag != true)
+		if (pSessionArray[_iIndex].bLoginFlag != true)
 			return false;
-		_sendpackettps++;
+
+		m_iSendPacketTPS++;
 		pPacket->AddRef();
 		pPacket->SetHeader_CustomShort(pPacket->GetDataSize());
-		_pSessionarray[index].sendqueue.Enqueue(pPacket);
+		pSessionArray[_iIndex].SendQ.Enqueue(pPacket);
 
-		if (0 == InterlockedDecrement(&_pSessionarray[index].iocount))
+		if (0 == InterlockedDecrement(&pSessionArray[_iIndex].lIOCount))
 		{
-			ClientRelease(&_pSessionarray[index]);
+			ClientRelease(&pSessionArray[_iIndex]);
 			return false;
 		}
-		SendPost(&_pSessionarray[index]);
+		SendPost(&pSessionArray[_iIndex]);
 		return true;
 	}
-	else
-	{
-		if (0 == InterlockedDecrement(&_pSessionarray[index].iocount))
-			ClientRelease(&_pSessionarray[index]);
-		return false;		
-	}
-	return true;
-}
 
-bool CLanServer::SetShutdownMode(bool bFlag)
-{
-	if (false == bFlag)
-	{
-		_bShutdown = false;
-		return false;
-	}
-
-	ServerStop();
-	return true;
-}
-
-SESSION* CLanServer::SessionAcquireLock(ULONG64 sessionkey)
-{
-	ULONG64 index = sessionkey >> 48;
-	SESSION *pSession = &_pSessionarray[index];
-	InterlockedIncrement(&pSession->iocount);
-
-	return pSession;
-}
-
-void CLanServer::SessionAcquireFree(SESSION *pSession)
-{
-	LONG retval = InterlockedDecrement(&pSession->iocount);
-	if (0 >= retval)
-	{
-		ClientRelease(pSession);
-	}
+	if (0 == InterlockedDecrement(&pSessionArray[_iIndex].lIOCount))
+		ClientRelease(&pSessionArray[_iIndex]);
+	return false;
 }
 
 bool CLanServer::ServerInit()
 {
-	WSADATA data;
-	int retval = WSAStartup(MAKEWORD(2, 2), &data);
-	if (0 != retval)
+	WSADATA _Data;
+	int _iRetval = WSAStartup(MAKEWORD(2, 2), &_Data);
+	if (0 != _iRetval)
 	{
-		wprintf(L"[Server :: ServerInit]	WSAStartup Error\n");
+		wprintf(L"[Server :: Server_Init]	WSAStartup Error\n");
 		return false;
 	}
 
-	_hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 0);
-	if (NULL == _hIOCP)
+	m_hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 0);
+	if (m_hIOCP == NULL)
 	{
-		wprintf(L"[Server :: ServerInit]	IOCP Init Error\n");
+		wprintf(L"[Server :: Server_Init]	IOCP Init Error\n");
 		return false;
 	}
 
-	_listensock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP,
-		NULL, 0, WSA_FLAG_OVERLAPPED);
-	if (INVALID_SOCKET == _listensock)
+	m_listensock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, 
+						NULL, 0, WSA_FLAG_OVERLAPPED);
+	if (m_listensock == INVALID_SOCKET)
 	{
-		wprintf(L"[Server :: ServerInit]	Listen Socket Init Error\n");
+		wprintf(L"[Server :: Server_Init]	Listen Socket Init Error\n");
 		return false;
 	}
-
-	wprintf(L"[Server :: ServerInit]	Complete\n");
+	wprintf(L"[Server :: Server_Init]		Complete\n");
 	return true;
 }
 
-bool CLanServer::ClientShutdown(SESSION *pSession)
+bool CLanServer::ClientShutdown(st_Session *pSession)
 {
-	int retval = shutdown(pSession->sock, SD_BOTH);
-	if (false == retval)
+	int _iRetval;
+	_iRetval = shutdown(pSession->sock, SD_BOTH);
+	if (false == _iRetval)
+	{
 		return false;
-
+	}
 	return true;
 }
 
-bool CLanServer::ClientRelease(SESSION *pSession)
+bool CLanServer::ClientRelease(st_Session *pSession)
 {
-	COMPARE compare;
-	compare.iocount = pSession->iocount;
-	compare.releaseflag = pSession->bRelease;
+	st_IO_RELEASE_COMPARE _CheckFlag;
+	_CheckFlag.iIOCount = pSession->lIOCount;
+	_CheckFlag.iReleaseFlag = pSession->bRelease;
 
-	if (false == InterlockedCompareExchange128((LONG64*)_pCompare, (LONG64)0,
-		(LONG64)0, (LONG64*)&compare))
-	{
-		_pCompare->iocount = 0;
-		_pCompare->releaseflag = 0;
-		return false;
-	}
+	if (FALSE == InterlockedCompareExchange128((LONG64*)pIOCompare, _CheckFlag.iIOCount, 
+								_CheckFlag.iReleaseFlag, (LONG64*)&_CheckFlag))
+		return FALSE;
 
-	pSession->bRelease = true;
+	pSession->bRelease = TRUE;
 	closesocket(pSession->sock);
 
-	while (0 < pSession->sendqueue.GetUseCount())
+	while (0 < pSession->SendQ.GetUseCount())
 	{
-		CPacket *pPacket;
-		pSession->sendqueue.Dequeue(&pPacket);
-		pPacket->Free();
+		CPacket *_pPacket;
+		pSession->SendQ.Dequeue(&_pPacket);
+		_pPacket->Free();
 	}
 
-	while (0 < pSession->packetqueue.GetUseSize())
+	while (0 < pSession->PacketQ.GetUseSize())
 	{
-		CPacket *pPacket;
-		pSession->packetqueue.Peek((char*)&pPacket, sizeof(CPacket*));
-		pPacket->Free();
-		pSession->packetqueue.Dequeue(sizeof(CPacket*));
+		CPacket *_pPacket;
+		pSession->PacketQ.Peek((char*)&_pPacket,sizeof(CPacket*));
+		_pPacket->Free();
+		pSession->PacketQ.Dequeue(sizeof(CPacket*));
 	}
 
-	pSession->bLoginflag = false;
+	pSession->bLoginFlag = false;
 
-	ULONG64 sessionkey = pSession->sessionkey;
-	unsigned int index = df_GET_INDEX(index, sessionkey);
+	unsigned __int64 iSessionKey = pSession->iSessionKey;
+	unsigned __int64 iIndex = GET_INDEX(iIndex, iSessionKey);
 
-	InterlockedDecrement(&_connectclient);
-	PutIndex(index);
-
+	InterlockedDecrement(&m_iConnectClient);
+	PutIndex(iIndex);
 	return true;
 }
 
-void CLanServer::PutIndex(unsigned int Index)
+void CLanServer::WorkerThread_Update()
 {
-	_sessionstack.Push(&_pIndex[Index]);
-	return;
-}
+	DWORD _dwRetval;
 
-void CLanServer::WorkerThreadUpdate()
-{
-	int retval;
-
-	while (_bShutdown)
+	while (1)
 	{
-		OVERLAPPED *pOver = NULL;
-		SESSION *pSession = NULL;
-		DWORD trans = 0;
+		OVERLAPPED * _pOver = NULL;
+		st_Session * _pSession = NULL;
+		DWORD _dwTrans = 0;
 
-		retval = GetQueuedCompletionStatus(_hIOCP, &trans, (PULONG_PTR)&pSession,
-			(LPWSAOVERLAPPED*)&pOver, INFINITE);
-
-		if (nullptr == pOver)
+		_dwRetval = GetQueuedCompletionStatus(m_hIOCP, &_dwTrans, (PULONG_PTR)&_pSession,
+									(LPWSAOVERLAPPED*)&_pOver, INFINITE);
+		if (nullptr == _pOver)
 		{
-			if (nullptr == pSession && 0 == trans)
+			if (nullptr == _pSession && 0 == _dwTrans)
 			{
-				PostQueuedCompletionStatus(_hIOCP, 0, 0, 0);
+				PostQueuedCompletionStatus(m_hIOCP, 0, 0, 0);
 			}
 		}
 
-		if (0 == trans)
-			shutdown(pSession->sock, SD_BOTH);
-		else if (pOver == &pSession->recvover)
-			CompleteRecv(pSession, trans);
-		else if (pOver == &pSession->sendover)
-			CompleteSend(pSession, trans);
-
-		retval = InterlockedDecrement(&pSession->iocount);
-		if (0 >= retval)
+		if (0 == _dwTrans)
 		{
-			if (0 == retval)
-				ClientRelease(pSession);
+			shutdown(_pSession->sock, SD_BOTH);
+		}
+		else if (_pOver == &_pSession->RecvOver)
+		{
+			CompleteRecv(_pSession, _dwTrans);
+		}
+		else if (_pOver == &_pSession->SendOver)
+		{
+			CompleteSend(_pSession, _dwTrans);
+		}
+
+		if (0 >= (_dwRetval =InterlockedDecrement(&_pSession->lIOCount)))
+		{
+			if (0 == _dwRetval)
+				ClientRelease(_pSession);
 		}
 	}
 }
 
-void CLanServer::AcceptThreadUpdate()
+void CLanServer::AcceptThread_Update()
 {
-	int retval = 0;
-	SOCKADDR_IN clientaddr;
-
-	while (_bShutdown)
+	DWORD _dwRetval = 0;
+	SOCKADDR_IN _ClientAddr;
+	
+	while (1)
 	{
-		int addrsize = sizeof(clientaddr);
-		SOCKET clientsock = accept(_listensock, (SOCKADDR*)&clientaddr, &addrsize);
-		if (INVALID_SOCKET == clientsock)
-		{
-			wprintf(L"[Server :: Accept]	accept Error\n");
+		int addrSize = sizeof(_ClientAddr);
+		SOCKET clientSock = accept(m_listensock, (SOCKADDR*)&_ClientAddr, &addrSize);
+		if (INVALID_SOCKET == clientSock)
 			break;
-		}
 
-		InterlockedIncrement(&_accepttps);
-		InterlockedIncrement(&_accepttotal);
+		InterlockedIncrement(&m_iAcceptTPS);
+		InterlockedIncrement(&m_iAcceptTotal);
 
-		OnConnectionRequest((WCHAR*)&clientaddr.sin_addr, clientaddr.sin_port);
+		OnConnectionRequest((WCHAR*)&_ClientAddr.sin_addr, _ClientAddr.sin_port);
 
-		unsigned int *pIndex = GetIndex();
-		if (nullptr == pIndex)
+		unsigned __int64 * _iSessionNum = GetIndex();
+		if (_iSessionNum == nullptr)
 		{
-			closesocket(clientsock);
+			closesocket(clientSock);
 			continue;
 		}
 
-		if (true == _pSessionarray[*pIndex].bLoginflag)
+		if (pSessionArray[*_iSessionNum].bLoginFlag == TRUE)
 		{
-			ClientRelease(&_pSessionarray[*pIndex]);
+			ClientRelease(&pSessionArray[*_iSessionNum]);
 			continue;
 		}
 
-		unsigned int index = *pIndex;
+		unsigned __int64 iIndex = *_iSessionNum;
 
-		_pSessionarray[*pIndex].sessionkey = _sessionkeycnt++;
-		df_SET_INDEX(index, _pSessionarray[*pIndex].sessionkey);
-		_pSessionarray[*pIndex].sock = clientsock;
-		_pSessionarray[*pIndex].recvqueue.Clear();
-		_pSessionarray[*pIndex].packetqueue.Clear();
-		_pSessionarray[*pIndex].sendflag = true;
-		_pSessionarray[*pIndex].sendcount = 0;
-		InterlockedIncrement(&_connectclient);
-		_pSessionarray[*pIndex].bLoginflag = true;
-		_pSessionarray[*pIndex].info.sessionkey = _pSessionarray[*pIndex].sessionkey;
-		_pSessionarray[*pIndex].bRelease = false;
+		pSessionArray[*_iSessionNum].iSessionKey = m_iSessionKeyCnt++;
+		SET_INDEX(iIndex, pSessionArray[*_iSessionNum].iSessionKey);
+		pSessionArray[*_iSessionNum].sock = clientSock;
+		pSessionArray[*_iSessionNum].RecvQ.Clear();
+		pSessionArray[*_iSessionNum].PacketQ.Clear();
+		pSessionArray[*_iSessionNum].lSendFlag = TRUE;
+		pSessionArray[*_iSessionNum].lSendCount = 0;
+		InterlockedIncrement(&m_iConnectClient);
+		pSessionArray[*_iSessionNum].bLoginFlag = TRUE;
+		pSessionArray[*_iSessionNum].Info.iSessionKey = 
+			pSessionArray[*_iSessionNum].iSessionKey;
+		pSessionArray[*_iSessionNum].bRelease = FALSE;
 
-		InterlockedIncrement(&_pSessionarray[*pIndex].iocount);
-		CreateIoCompletionPort((HANDLE)clientsock, _hIOCP,
-			(ULONG_PTR)&_pSessionarray[*pIndex].info,0);
-		OnClientJoin(&_pSessionarray[*pIndex].info);
-		StartRecvPost(&_pSessionarray[*pIndex]);
+		InterlockedIncrement(&pSessionArray[*_iSessionNum].lIOCount);
+		CreateIoCompletionPort((HANDLE)clientSock, m_hIOCP, 
+						(ULONG_PTR)&pSessionArray[*_iSessionNum], 0);
+		OnClientJoin(&pSessionArray[*_iSessionNum].Info);
+		StartRecvPost(&pSessionArray[*_iSessionNum]);
 	}
 }
 
-void CLanServer::MonitorThreadUpdate()
+void CLanServer::MonitorThread_Update()
 {
-	cout << endl;
+	wprintf(L"\n");
 
-	struct tm *t = new struct tm;
-	time_t timer;
+	struct tm * _t = new struct tm;
+	time_t _timer;
 
-	while (_bShutdown)
+	while (1)
 	{
 		Sleep(1000);
-		timer = time(NULL);
-		localtime_s(t, &timer);
-		if (true == _bMonitorflag)
+		_timer = time(NULL);
+		localtime_s(_t, &_timer);
+		if (m_bMonitorFlag == TRUE)
 		{
-			wprintf(L"[%d/%d/%d %d:%d:%d]\n", t->tm_year + 1900, t->tm_mon + 1,
-				t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec);
-			wprintf(L"[ConnectSession		:	%I64d]\n", _connectclient);
-			wprintf(L"[Accept_TPS		:	%I64d]\n", _accepttps);
-			wprintf(L"[Accept_Total		:	%I64d]\n", _accepttotal);
-			wprintf(L"[RecvPacket_TPS		:	%I64d]\n", _recvpackettps);
-			wprintf(L"[SendPacket_TPS		:	%I64d]\n", _sendpackettps);
-			wprintf(L"[MemoryPool_AllocCount	:	%I64d]\n", CPacket::GetAllocPool());
+			wprintf(L"[%d/%d/%d %d:%d:%d]\n", _t->tm_year + 1900, _t->tm_mon + 1, 
+				_t->tm_mday, _t->tm_hour, _t->tm_min, _t->tm_sec);
+			wprintf(L"[ConnectSession		:	%I64d]\n", m_iConnectClient);
+			wprintf(L"[Accept_TPS		:	%I64d]\n", m_iAcceptTPS);
+			wprintf(L"[Accept_Total		:	%I64d]\n", m_iAcceptTotal);
+			wprintf(L"[RecvPacket_TPS		:	%I64d]\n", m_iRecvPacketTPS);
+			wprintf(L"[SendPacket_TPS		:	%I64d]\n", m_iSendPacketTPS);
+ 			wprintf(L"[MemoryPool_AllocCount	:	%I64d]\n", CPacket::GetAllocPool());
 			wprintf(L"[MemoryPool_UseCount	:	%I64d]\n\n", CPacket::GetUsePool());
 		}
-		_accepttps = 0;
-		_recvpackettps = 0;
-		_sendpackettps = 0;
+		m_iAcceptTPS = 0;
+		m_iRecvPacketTPS = 0;
+		m_iSendPacketTPS = 0;
 	}
-	delete t;
+	delete _t;
 }
 
-void CLanServer::StartRecvPost(SESSION *pSession)
+st_Session* CLanServer::SessionAcquireLock(unsigned __int64 iSessionKey)
 {
-	int retval = 0;
-	DWORD flags = 0;
-	ZeroMemory(&pSession->recvover, sizeof(pSession->recvover));
+	unsigned __int64 _iIndex = iSessionKey >> 48;
+	st_Session *_pSession = &pSessionArray[_iIndex];
+	InterlockedIncrement(&_pSession->lIOCount);
 
-	WSABUF buf[2];
-	DWORD freesize = pSession->recvqueue.GetFreeSize();
-	DWORD notbrokenpushsize = pSession->recvqueue.GetNotBrokenPushSize();
-	if (0 == freesize && 0 == notbrokenpushsize)
+	return _pSession;
+}
+
+void CLanServer::SessionAcquireFree(st_Session *pSession)
+{
+	DWORD _dwRetval;
+	if (0 >= (_dwRetval = InterlockedDecrement(&pSession->lIOCount)))
 	{
-		retval = InterlockedDecrement(&pSession->iocount);
-		if (0 >= retval)
+		if (0 == _dwRetval)
+			ClientRelease(pSession);
+	}
+}
+
+void CLanServer::StartRecvPost(st_Session *pSession)
+{
+	DWORD _dwRetval = 0;
+	DWORD _dwFlags = 0;
+	ZeroMemory(&pSession->RecvOver, sizeof(pSession->RecvOver));
+
+	WSABUF _Buf[2];
+	DWORD _dwFreeSize = pSession->RecvQ.GetFreeSize();
+	DWORD _dwNotBrokenPushSize = pSession->RecvQ.GetNotBrokenPushSize();
+	if (0 == _dwFreeSize && 0 == _dwNotBrokenPushSize)
+	{
+		if (0 >= (_dwRetval = InterlockedDecrement(&pSession->lIOCount)))
 		{
-			if (0 == retval)
+			if (0 == _dwRetval)
 				ClientRelease(pSession);
 		}
 		else
 			shutdown(pSession->sock, SD_BOTH);
 		return;
 	}
-	int bufnum = (notbrokenpushsize < freesize) ? 2 : 1;
+	int _iNumOfBuf = (_dwNotBrokenPushSize < _dwFreeSize) ? 2 : 1;
 
-	buf[0].buf = pSession->recvqueue.GetWriteBufferPtr();
-	buf[0].len = notbrokenpushsize;
+	_Buf[0].buf = pSession->RecvQ.GetWriteBufferPtr();
+	_Buf[0].len = _dwNotBrokenPushSize;
 
-	if (2 == bufnum)
+	if (2 == _iNumOfBuf)
 	{
-		buf[1].buf = pSession->recvqueue.GetBufferPtr();
-		buf[1].len = freesize - notbrokenpushsize;
+		_Buf[1].buf = pSession->RecvQ.GetBufferPtr();
+		_Buf[1].len = _dwFreeSize - _dwNotBrokenPushSize;
 	}
-
-	if (SOCKET_ERROR == WSARecv(pSession->sock, buf, bufnum,
-		NULL, &flags, &pSession->recvover, NULL))
+	if (SOCKET_ERROR == WSARecv(pSession->sock, _Buf, _iNumOfBuf, 
+							NULL, &_dwFlags, &pSession->RecvOver, NULL))
 	{
-		int lasterror = WSAGetLastError();
-		if (ERROR_IO_PENDING != lasterror)
+		int _iLastError = WSAGetLastError();
+		if (ERROR_IO_PENDING != _iLastError)
 		{
-			retval = InterlockedDecrement(&pSession->iocount);
-			if (0 >= retval)
+			if (0 >= (_dwRetval = InterlockedDecrement(&pSession->lIOCount)))
 			{
-				if (0 == retval)
+				if (0 == _dwRetval)
 					ClientRelease(pSession);
 			}
 			else
@@ -509,183 +466,212 @@ void CLanServer::StartRecvPost(SESSION *pSession)
 	}
 }
 
-void CLanServer::RecvPost(SESSION *pSession)
+void CLanServer::RecvPost(st_Session *pSession)
 {
-	InterlockedIncrement(&pSession->iocount);
+	InterlockedIncrement(&pSession->lIOCount);
 
-	int retval = 0;
-	DWORD flags = 0;
-	ZeroMemory(&pSession->recvover, sizeof(pSession->recvover));
+	DWORD _dwRetval = 0;
+	DWORD _dwFlags = 0;
+	ZeroMemory(&pSession->RecvOver, sizeof(pSession->RecvOver));
 
-	WSABUF buf[2];
-	DWORD freesize = pSession->recvqueue.GetFreeSize();
-	DWORD notbrokenpushsize = pSession->recvqueue.GetNotBrokenPushSize();
-	if (0 == freesize && 0 == notbrokenpushsize)
+	WSABUF _Buf[2];
+	DWORD _dwFreeSize = pSession->RecvQ.GetFreeSize();
+	DWORD _dwNotBrokenPushSize = pSession->RecvQ.GetNotBrokenPushSize();
+	if (0 == _dwFreeSize && 0 == _dwNotBrokenPushSize)
 	{
-		retval = InterlockedDecrement(&pSession->iocount);
-		if (0 >= retval)
+		if (0 >= (_dwRetval = InterlockedDecrement(&pSession->lIOCount)))
 		{
-			if (0 == retval)
+			if (0 == _dwRetval)
 				ClientRelease(pSession);
 		}
 		else
 			shutdown(pSession->sock, SD_BOTH);
 		return;
 	}
-	int bufnum = (notbrokenpushsize < freesize) ? 2 : 1;
 
-	buf[0].buf = pSession->recvqueue.GetWriteBufferPtr();
-	buf[0].len = notbrokenpushsize;
+	int _iNumOfBuf = (_dwNotBrokenPushSize < _dwFreeSize) ? 2 : 1;
 
-	if (2 == bufnum)
+	_Buf[0].buf = pSession->RecvQ.GetWriteBufferPtr();
+	_Buf[0].len = _dwNotBrokenPushSize;
+
+	if (2 == _iNumOfBuf)
 	{
-		buf[1].buf = pSession->recvqueue.GetBufferPtr();
-		buf[1].len = freesize - notbrokenpushsize;
+		_Buf[1].buf = pSession->RecvQ.GetBufferPtr();
+		_Buf[1].len = _dwFreeSize - _dwNotBrokenPushSize;
 	}
 
-	if (SOCKET_ERROR == WSARecv(pSession->sock, buf, bufnum,
-		NULL, &flags, &pSession->recvover, NULL))
+	if (SOCKET_ERROR == WSARecv(pSession->sock, _Buf, _iNumOfBuf, 
+							NULL, &_dwFlags, &pSession->RecvOver, NULL))
 	{
-		int lasterror = WSAGetLastError();
-		if (ERROR_IO_PENDING != lasterror)
+		int _iLastError = WSAGetLastError();
+		if (ERROR_IO_PENDING != _iLastError)
 		{
-			retval = InterlockedDecrement(&pSession->iocount);
-			if (0 >= retval)
+			if (0 >= (_dwRetval = InterlockedDecrement(&pSession->lIOCount)))
 			{
-				if (0 == retval)
+				if (0 == _dwRetval)
 					ClientRelease(pSession);
 			}
 			else
 				shutdown(pSession->sock, SD_BOTH);
 		}
-	}	
+	}
 }
 
-void CLanServer::SendPost(SESSION *pSession)
+void CLanServer::SendPost(st_Session *pSession)
 {
-	int retval = 0;
-	do
+	DWORD _dwRetval;
+	do 
 	{
-		if (false == InterlockedCompareExchange(&pSession->sendflag, false, true))
-			return;
+		if (false == InterlockedCompareExchange(&pSession->lSendFlag, false, true))		
+			return;		
 
-		if (0 == pSession->sendqueue.GetUseCount())
+		if (0 == pSession->SendQ.GetUseCount())
 		{
-			InterlockedExchange(&pSession->sendflag, true);
+			InterlockedExchange(&pSession->lSendFlag, true);
 			continue;
 		}
-		ZeroMemory(&pSession->sendover, sizeof(pSession->sendover));
-
-		WSABUF buf[df_MAX_WSABUF_NUM];
-		CPacket *pPacket;
-		long bufnum = 0;
-		int usesize = pSession->sendqueue.GetUseCount();
-		if (usesize > df_MAX_WSABUF_NUM)
+		ZeroMemory(&pSession->SendOver, sizeof(pSession->SendOver));
+		
+		WSABUF _Buf[MAX_WSABUF_NUMBER];
+		CPacket *_pPacket;
+		long _lBufNum = 0;
+		int _iUseSize = (pSession->SendQ.GetUseCount());
+		if (_iUseSize > MAX_WSABUF_NUMBER)
 		{
-			bufnum = df_MAX_WSABUF_NUM;
-			pSession->sendcount = df_MAX_WSABUF_NUM;
-			for (int i = 0; i < df_MAX_WSABUF_NUM; i++)
+			_lBufNum = MAX_WSABUF_NUMBER;
+			pSession->lSendCount = MAX_WSABUF_NUMBER;
+			for (int i = 0; i < MAX_WSABUF_NUMBER; i++)
 			{
-				pSession->sendqueue.Dequeue(&pPacket);
-				pSession->packetqueue.Enqueue((char*)&pPacket, sizeof(CPacket*));
-				buf[i].buf = pPacket->GetBufferPtr();
-				buf[i].len = pPacket->GetPacketSize();
+				pSession->SendQ.Dequeue(&_pPacket);
+				pSession->PacketQ.Enqueue((char*)&_pPacket, sizeof(CPacket*));
+				_Buf[i].buf = _pPacket->GetBufferPtr();
+				_Buf[i].len = _pPacket->GetPacketSize();
 			}
 		}
 		else
 		{
-			bufnum = usesize;
-			pSession->sendcount = usesize;
-			for (int i = 0; i < usesize; i++)
-			{
-				pSession->sendqueue.Dequeue(&pPacket);
-				pSession->packetqueue.Enqueue((char*)&pPacket, sizeof(CPacket*));
-				buf[i].buf = pPacket->GetBufferPtr();
-				buf[i].len = pPacket->GetPacketSize();
+			_lBufNum = _iUseSize;
+			pSession->lSendCount = _iUseSize;
+			for (int i = 0; i < _iUseSize; i++)
+			{	
+				pSession->SendQ.Dequeue(&_pPacket);
+				pSession->PacketQ.Enqueue((char*)&_pPacket, sizeof(CPacket*));
+				_Buf[i].buf = _pPacket->GetBufferPtr();
+				_Buf[i].len = _pPacket->GetPacketSize();
 			}
 		}
-		InterlockedIncrement(&pSession->iocount);
-		if (SOCKET_ERROR == WSASend(pSession->sock, buf, bufnum,
-			NULL, 0, &pSession->sendover, NULL))
+		InterlockedIncrement(&pSession->lIOCount);
+		if (SOCKET_ERROR == WSASend(pSession->sock, _Buf, _lBufNum, 
+								NULL, 0, &pSession->SendOver, NULL))
 		{
-			int lasterror = WSAGetLastError();
-			if (ERROR_IO_PENDING != lasterror)
-			{
-				retval = InterlockedDecrement(&pSession->iocount);
-				if (0 >= retval)
+			int _LastError = WSAGetLastError();
+			if (ERROR_IO_PENDING != _LastError)
+			{				  
+				if (0 >= (_dwRetval = InterlockedDecrement(&pSession->lIOCount)))
 				{
-					if (0 == retval)
+					if (0 == _dwRetval)
 						ClientRelease(pSession);
 				}
 				else
 					shutdown(pSession->sock, SD_BOTH);
 			}
 		}
-	} while (0 != pSession->sendqueue.GetUseCount());
+	} while (0 != pSession->SendQ.GetUseCount());
 }
 
-void CLanServer::CompleteRecv(SESSION *pSession, DWORD dwTransfered)
+void CLanServer::CompleteRecv(st_Session *pSession, DWORD dwTransfered)
 {
-	pSession->recvqueue.Enqueue(dwTransfered);
-	WORD payloadsize = 0;
+	pSession->RecvQ.Enqueue(dwTransfered);
+ 	WORD _wPayloadSize = 0;
 
-	while (df_HEADER_SIZE == pSession->recvqueue.Peek((char*)&payloadsize, df_HEADER_SIZE))
+	while (HEADER_SIZE == pSession->RecvQ.Peek((char*)&_wPayloadSize, HEADER_SIZE))
 	{
-		if (pSession->recvqueue.GetUseSize() < df_HEADER_SIZE + payloadsize)
+		CPacket *_pPacket = CPacket::Alloc();
+		if (pSession->RecvQ.GetUseSize() < HEADER_SIZE + _wPayloadSize)
 			break;
-		pSession->recvqueue.Dequeue(df_HEADER_SIZE);
-		CPacket *pPacket = CPacket::Alloc();
-		if (pPacket->GetFreeSize() < payloadsize)
+
+		pSession->RecvQ.Dequeue(HEADER_SIZE);
+
+		if (_pPacket->GetFreeSize() < _wPayloadSize)
 		{
 			shutdown(pSession->sock, SD_BOTH);
 			return;
 		}
-		pSession->recvqueue.Dequeue(pPacket->GetWritePtr(), payloadsize);
-		pPacket->PushData(payloadsize);
+		pSession->RecvQ.Dequeue(_pPacket->GetWritePtr(), _wPayloadSize);
+		_pPacket->PushData(_wPayloadSize);
 
-		if (false == OnRecv(pSession, pPacket))
+		if (false == OnRecv(pSession, _pPacket))
 			return;
 
-		pPacket->Free();
+		_pPacket->Free();
 	}
 	RecvPost(pSession);
 }
 
-void CLanServer::CompleteSend(SESSION *pSession, DWORD dwTransfered)
+void CLanServer::CompleteSend(st_Session *pSession, DWORD dwTransfered)
 {
-	CPacket *pPacket[df_MAX_WSABUF_NUM];
-	pSession->packetqueue.Peek((char*)&pPacket, sizeof(CPacket*));
-	for (int i = 0; i < pSession->sendcount; i++)
+	CPacket *_pPacket[MAX_WSABUF_NUMBER];
+	pSession->PacketQ.Peek((char*)&_pPacket, sizeof(CPacket*) *pSession->lSendCount);
+	for (int i = 0; i < pSession->lSendCount; i++)
 	{
-		pPacket[i]->Free();
-		pSession->packetqueue.Dequeue(sizeof(CPacket*));
+		_pPacket[i]->Free();
+		pSession->PacketQ.Dequeue(sizeof(CPacket*));
 	}
-	InterlockedExchange(&pSession->sendflag, true);
+
+	InterlockedExchange(&pSession->lSendFlag, true);
 
 	SendPost(pSession);
 }
 
-bool CLanServer::OnRecv(SESSION *pSession, CPacket *pPacket)
+bool CLanServer::OnRecv(st_Session *pSession, CPacket *pPacket)
 {
-	_recvpackettps++;
+	m_iRecvPacketTPS++;
 
-	LONG64 data = 0;
-	*pPacket >> data;
+	__int64 _iData = 0;
+	*pPacket >> _iData;
 
-	CPacket *pNewpacket = CPacket::Alloc();
-	*pNewpacket << data;
+	CPacket *_pPacket = CPacket::Alloc();
+	*_pPacket << _iData;
 
 	bool retval = false;
 	if (pSession->bRelease == false)
-		retval = SendPacket(pSession->sessionkey, pNewpacket);
-	pNewpacket->Free();
+		retval = SendPacket(pSession->iSessionKey, _pPacket);
+	_pPacket->Free();
 
 	return retval;
 }
 
-unsigned int* CLanServer::GetIndex()
+bool CLanServer::SetShutDownMode(bool bFlag)
 {
-	unsigned int *index = nullptr;
-	_sessionstack.Pop(&index);
-	return index;
+	m_bShutdown = bFlag;
+	PostQueuedCompletionStatus(m_hIOCP, 0, 0, 0);
+	WaitForMultipleObjects(m_iAllThreadCnt, m_hAllthread, true, INFINITE);
+
+	ServerStop();
+
+	return m_bShutdown;
+}
+
+bool CLanServer::SetWhiteIPMode(bool bFlag)
+{
+	m_bWhiteIPMode = bFlag;
+	return m_bWhiteIPMode;
+}
+
+bool CLanServer::SetMonitorMode(bool bFlag)
+{
+	m_bMonitorFlag = bFlag;
+	return m_bMonitorFlag;
+}
+
+unsigned __int64* CLanServer::GetIndex()
+{
+	unsigned __int64 *_iIndex = nullptr;
+	SessionStack.Pop(&_iIndex);
+	return _iIndex;
+}
+
+void CLanServer::PutIndex(unsigned __int64 iIndex)
+{
+	SessionStack.Push(&pIndex[iIndex]);
 }

@@ -4,7 +4,7 @@
 #include <Windows.h>
 
 template<class Type>
-class CFreeList
+class CMemoryPool
 {
 private:
 	struct st_NODE
@@ -14,7 +14,7 @@ private:
 
 		st_NODE() :
 			pNext(nullptr)
-		{}
+			{}
 	};
 	struct st_TOP
 	{
@@ -27,8 +27,8 @@ private:
 	};
 
 public:
-	CFreeList();
-	~CFreeList();
+	CMemoryPool();
+	~CMemoryPool();
 
 	Type *Alloc();
 	void Free(Type *pData);
@@ -43,7 +43,7 @@ private:
 };
 
 template<class Type>
-inline CFreeList<Type>::CFreeList()
+inline CMemoryPool<Type>::CMemoryPool()
 {
 	m_lUseCount = 0;
 	m_lAllocCount = 0;
@@ -54,7 +54,7 @@ inline CFreeList<Type>::CFreeList()
 }
 
 template<class Type>
-inline CFreeList<Type>::~CFreeList()
+inline CMemoryPool<Type>::~CMemoryPool()
 {
 	st_NODE *_pNode = m_pTop->pNode;
 	while (_pNode)
@@ -68,7 +68,7 @@ inline CFreeList<Type>::~CFreeList()
 }
 
 template<class Type>
-inline Type * CFreeList<Type>::Alloc()
+inline Type * CMemoryPool<Type>::Alloc()
 {
 	InterlockedIncrement(&m_lUseCount);
 
@@ -83,7 +83,7 @@ inline Type * CFreeList<Type>::Alloc()
 			return &((new st_NODE)->Data);
 		}
 		if (InterlockedCompareExchange128((LONG64*)m_pTop, _Top.iCount + 1,
-			(LONG64)_Top.pNode->pNext, (LONG64*)&_Top))
+										(LONG64)_Top.pNode->pNext, (LONG64*)&_Top))
 		{
 			return &(_Top.pNode->Data);
 		}
@@ -91,7 +91,7 @@ inline Type * CFreeList<Type>::Alloc()
 }
 
 template<class Type>
-inline void CFreeList<Type>::Free(Type *pData)
+inline void CMemoryPool<Type>::Free(Type *pData)
 {
 	InterlockedDecrement(&m_lUseCount);
 	st_NODE *_pNode = (st_NODE*)((char*)pData - sizeof(st_NODE*));
@@ -103,7 +103,7 @@ inline void CFreeList<Type>::Free(Type *pData)
 	{
 		_pNode->pNext = _Top.pNode;
 		if (InterlockedCompareExchange128((LONG64*)m_pTop, _Top.iCount + 1,
-			(LONG64)_pNode, (LONG64*)&_Top))
+										(LONG64)_pNode, (LONG64*)&_Top))
 		{
 			return;
 		}

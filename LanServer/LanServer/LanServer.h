@@ -4,61 +4,63 @@
 #pragma comment(lib, "ws2_32")
 #pragma comment(lib, "winmm.lib")
 
-#include "Log.h"
 #include "Packet.h"
 #include "RingBuffer.h"
-#include "Dump.h"
 #include "MemoryPool.h"
 #include "MemoryPool_TLS.h"
 #include "LockFreeStack.h"
 #include "LockFreeQueue.h"
 
-#define	df_SERVERPORT			6000
-#define df_MAX_WORKER_THREAD	10
-#define df_MAX_CLINET_NUM		2000
-#define df_MAX_WSABUF_NUM		100
-#define df_MAX_QUEUE_SIZE		10000
-#define df_HEADER_SIZE			2
+#define		SERVERPORT				6000
+#define		MAX_WORKER_THREAD		10
+#define		MAX_CLIENT_NUMBER		2000
+#define		MAX_WSABUF_NUMBER		100
+#define		MAX_QUEUE_SIZE			10000
+#define		HEADER_SIZE				2
 
-#define	df_SET_INDEX(Index, SessionKey)		Index = Index << 48; SessionKey = Index | SessionKey;
-#define df_GET_INDEX(Index, SessionKey)		Index = SessionKey >> 48;
+#define		SET_INDEX(Index, SessionKey)		Index = Index << 48; SessionKey = Index | SessionKey;
+#define		GET_INDEX(Index, SessionKey)		Index = SessionKey >> 48;
 
-typedef struct st_SessionInfo
+struct st_SessionInfo
 {
-	//	접속자 정보를 전달해줄 구조체
-	//	전달해야할 정보가 있을 경우 추가
-	st_SessionInfo() : sessionkey(NULL) {}
+	unsigned __int64 iSessionKey;
 
-	ULONG64 sessionkey;
-}INFO;
+	st_SessionInfo() :
+		iSessionKey(NULL){}
+};
 
-typedef struct st_ReleaseCompare
+struct st_IO_RELEASE_COMPARE
 {
-	st_ReleaseCompare() : iocount(0), releaseflag(false) {}
+	__int64	iIOCount;
+	__int64	iReleaseFlag;
 
-	long iocount;
-	long releaseflag;
-}COMPARE;
+	st_IO_RELEASE_COMPARE() :
+		iIOCount(0),
+		iReleaseFlag(false) {}
+};
 
-typedef struct st_Session
+struct st_Session
 {
-	st_Session() : recvqueue(df_MAX_QUEUE_SIZE), packetqueue(df_MAX_QUEUE_SIZE),
-		iocount(0), sendflag(true) {}
+	bool				bLoginFlag;
+	bool				bRelease;
+	long				lIOCount;
+	long				lSendFlag;
+	long				lSendCount;
+	unsigned __int64	iSessionKey;
+	SOCKET				sock;
+	OVERLAPPED			SendOver;
+	OVERLAPPED			RecvOver;
+	CRingBuffer			RecvQ;
+	CRingBuffer			PacketQ;
+	CLockFreeQueue<CPacket*> SendQ;
+	st_SessionInfo		Info;
 
-	long		iocount;
-	long		sendflag;
-	long		sendcount;
-	bool		bLoginflag;
-	bool		bRelease;
-	ULONG64		sessionkey;
-	OVERLAPPED	sendover;
-	OVERLAPPED	recvover;
-	CRingBuffer	recvqueue;
-	CRingBuffer packetqueue;
-	CLockFreeQueue<CPacket*> sendqueue;
-	SOCKET		sock;
-	INFO		info;
-}SESSION;
+	st_Session() :
+		RecvQ(MAX_QUEUE_SIZE),
+		PacketQ(MAX_QUEUE_SIZE),
+		lIOCount(0),
+		lSendFlag(true){}
+};
 
 class CLanServer
 {
@@ -66,105 +68,105 @@ public:
 	CLanServer();
 	~CLanServer();
 
-	void	Disconnect(ULONG64 sessionkey);
-	virtual void	OnClientJoin(INFO *pInfo) = 0;
-	virtual void	OnClientLeave(ULONG64 sessionkey) = 0;
-	virtual void	OnConnectionRequest(WCHAR *pClientIP, int port) = 0;
-	virtual void	OnError(int errorcode, WCHAR *pError) = 0;
+	void				Disconnect(unsigned __int64 iSessionKey);
+	virtual void		OnClientJoin(st_SessionInfo *pInfo) = 0;
+	virtual void		OnClientLeave(unsigned __int64 iSessionKey) = 0;
+	virtual void		OnConnectionRequest(WCHAR * pClientIP, int iPort) = 0;	
+	virtual void		OnError(int iErrorCode, WCHAR *pError) = 0;
+	unsigned __int64	GetClientCount();
 
-	bool	ServerStart(const WCHAR *pOpenIP, int port, int maxworkerthread,
-				bool bNodelay, int maxsession);
-	bool	ServerStop();
-	bool	SendPacket(ULONG64 sessionkey, CPacket *pPacket);
-	long	GetClientCount() { return _connectclient; }
-	bool	GetShutdownMode() { return _bShutdown; }
-	bool	GetWhiteIPMode() { return _bWhiteipmode; }
-	bool	GetMonitorMode() { return _bMonitorflag; }
-	bool	SetShutdownMode(bool bFlag);
-	bool	SetWhiteIPMode(bool bFlag) { _bWhiteipmode = bFlag; return _bWhiteipmode; }
-	bool	SetMonitorMode(bool bFlag) { _bMonitorflag = bFlag; return _bMonitorflag; }
+	bool				ServerStart(const WCHAR *pOpenIP, int iPort, int iMaxWorkerThread, 
+								bool bNodelay, int iMaxSession);
+	bool				ServerStop();
+	bool				SendPacket(unsigned __int64 iSessionKey, CPacket *pPacket);
+	bool				GetShutDownMode() { return m_bShutdown; }
+	bool				GetWhiteIPMode() { return m_bWhiteIPMode; }
+	bool				GetMonitorMode() { return m_bMonitorFlag; }
+	bool				SetShutDownMode(bool bFlag);
+	bool				SetWhiteIPMode(bool bFlag);
+	bool				SetMonitorMode(bool bFlag);
 
-	SESSION*	SessionAcquireLock(ULONG64 sessionkey);
-	void	SessionAcquireFree(SESSION *pSession);
+	st_Session*			SessionAcquireLock(unsigned __int64 SessionKey);
+	void				SessionAcquireFree(st_Session *pSession);
 
 private:
-	bool	ServerInit();
-	bool	ClientShutdown(SESSION *pSession);
-	bool	ClientRelease(SESSION *pSession);
-
-	void	PutIndex(unsigned int Index);
-	void	WorkerThreadUpdate();
-	void	AcceptThreadUpdate();
-	void	MonitorThreadUpdate();
-	void	StartRecvPost(SESSION *pSession);
-	void	RecvPost(SESSION *pSession);
-	void	SendPost(SESSION *pSession);
-	void	CompleteRecv(SESSION *pSession, DWORD dwTransfered);
-	void	CompleteSend(SESSION *pSession, DWORD dwTransfered);
-	bool	OnRecv(SESSION *pSession, CPacket *pPacket);
-	unsigned int* GetIndex();
+	bool				ServerInit();
+	bool				ClientShutdown(st_Session *pSession);
+	bool				ClientRelease(st_Session *pSession);
 
 	static unsigned int WINAPI WorkerThread(LPVOID arg)
 	{
-		CLanServer *pWorker = (CLanServer*)arg;
-		if (pWorker == NULL)
+		CLanServer *_pWorkerThread = (CLanServer *)arg;
+		if (_pWorkerThread == NULL)
 		{
-			wprintf(L"[LanServer :: WorkerThread] Init Error\n");
+			wprintf(L"[Server :: WorkerThread]	Init Error\n");
 			return false;
 		}
-		pWorker->WorkerThreadUpdate();
+		_pWorkerThread->WorkerThread_Update();
 		return true;
 	}
 
 	static unsigned int WINAPI AcceptThread(LPVOID arg)
 	{
-		CLanServer *pAccept = (CLanServer*)arg;
-		if (pAccept = NULL)
+		CLanServer *_pAcceptThread = (CLanServer*)arg;
+		if (_pAcceptThread == NULL)
 		{
-			wprintf(L"[LanServer :: AcceptThread] Init Error\n");
+			wprintf(L"[Server :: AcceptThread]	Init Error\n");
 			return false;
 		}
-		pAccept->AcceptThreadUpdate();
+		_pAcceptThread->AcceptThread_Update();
 		return true;
 	}
 
 	static unsigned int WINAPI MonitorThread(LPVOID arg)
 	{
-		CLanServer *pMonitor = (CLanServer*)arg;
-		if (pMonitor == NULL)
+		CLanServer *_pMonitorThread = (CLanServer*)arg;
+		if (_pMonitorThread == NULL)
 		{
-			wprintf(L"[LanServer :: MonitorThread] Init Error\n");
+			wprintf(L"[Server :: MonitorThread]	Init Error\n");
 			return false;
 		}
-		pMonitor->MonitorThreadUpdate();
+		_pMonitorThread->MonitorThread_Update();
 		return true;
 	}
 
+	void				PutIndex(unsigned __int64 iIndex);
+	void				WorkerThread_Update();
+	void				AcceptThread_Update();
+	void				MonitorThread_Update();
+	void				StartRecvPost(st_Session *pSession);
+	void				RecvPost(st_Session *pSession);
+	void				SendPost(st_Session *pSession);
+	void				CompleteRecv(st_Session *pSession, DWORD dwTransfered);
+	void				CompleteSend(st_Session *pSession, DWORD dwTransfered);
+	bool				OnRecv(st_Session *pSession, CPacket *pPacket);
+	unsigned __int64*	GetIndex();
+
 private:
-	HANDLE	_hIOCP;
-	HANDLE	_hWorkerThread[50];
-	HANDLE	_hAcceptThread;
-	HANDLE	_hMonitorThread;
-	HANDLE	_hAllThread[100];
+	CLockFreeStack<UINT64*>	SessionStack; 
+	st_IO_RELEASE_COMPARE	*pIOCompare;
+	st_Session				*pSessionArray;
+	SOCKET					m_listensock;
+	CRITICAL_SECTION		m_SessionCS;
 
-	CLockFreeStack<unsigned int*> _sessionstack;
-	COMPARE *_pCompare;
-	SESSION *_pSessionarray;
-	SOCKET	_listensock;
-	CRITICAL_SECTION _sessioncs;
+	HANDLE					m_hIOCP;
+	HANDLE					m_hWorkerThread[100];
+	HANDLE					m_hAcceptThread;
+	HANDLE					m_hMonitorThread;
+	HANDLE					m_hAllthread[200];
 	
-	bool	_bWhiteipmode;
-	bool	_bShutdown;
-	bool	_bMonitorflag;
+	bool					m_bWhiteIPMode;
+	bool					m_bShutdown;
+	bool					m_bMonitorFlag;
 
-	unsigned int	*_pIndex;
-	long	_allthreadcnt;
-	long	_sessionkeycnt;
-	long	_accepttps;
-	long	_accepttotal;
-	long	_recvpackettps;
-	long	_sendpackettps;
-	long	_connectclient;
+	unsigned __int64		m_iAllThreadCnt;
+	unsigned __int64		*pIndex;
+	unsigned __int64		m_iSessionKeyCnt;
+	unsigned __int64		m_iAcceptTPS;
+	unsigned __int64		m_iAcceptTotal;
+	unsigned __int64		m_iRecvPacketTPS;
+	unsigned __int64		m_iSendPacketTPS;
+	unsigned __int64		m_iConnectClient;
 };
 
 #endif _LANSERVER_IOCP_LANSERVER_H_

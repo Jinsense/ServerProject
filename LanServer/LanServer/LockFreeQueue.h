@@ -24,7 +24,7 @@ class CLockFreeQueue
 			pNode(nullptr),
 			iCount(NULL) {}
 	};
-
+	
 public:
 	CLockFreeQueue();
 	~CLockFreeQueue();
@@ -33,12 +33,12 @@ public:
 	bool Dequeue(Type *pData);
 
 	long GetUseCount();
-
+	
 private:
 	long				m_lUseCount;
 	st_TOP				*m_pFront;
 	st_TOP				*m_pRear;
-	CFreeList<st_NODE>	m_FreeList;
+	CMemoryPool<st_NODE>	m_FreeList;
 };
 
 template<class Type>
@@ -88,13 +88,13 @@ inline void CLockFreeQueue<Type>::Enqueue(Type Data)
 			if (nullptr == InterlockedCompareExchangePointer((PVOID*)&_NewRear.pNode->pNext,
 				_pNewNode, nullptr))
 			{
-				InterlockedCompareExchange128((LONG64*)m_pRear, _NewRear.iCount + 1,
-					(LONG64)_pNewNode, (LONG64*)&_NewRear);
+				InterlockedCompareExchange128((LONG64*)m_pRear, _NewRear.iCount + 1, 
+											(LONG64)_pNewNode, (LONG64*)&_NewRear);
 				break;
 			}
 		}
-		InterlockedCompareExchange128((LONG64*)m_pRear, _NewRear.iCount + 1,
-			(LONG64)_NewRear.pNode->pNext, (LONG64*)&_NewRear);
+		InterlockedCompareExchange128((LONG64*)m_pRear, _NewRear.iCount + 1, 
+									(LONG64)_NewRear.pNode->pNext, (LONG64*)&_NewRear);
 	}
 	InterlockedIncrement(&m_lUseCount);
 }
@@ -120,8 +120,8 @@ inline bool CLockFreeQueue<Type>::Dequeue(Type *pData)
 			continue;
 		}
 		*pData = _pNext->Data;
-		if (InterlockedCompareExchange128((LONG64*)m_pFront, _Front.iCount + 1,
-			(LONG64)_Front.pNode->pNext, (LONG64*)&_Front))
+		if (InterlockedCompareExchange128((LONG64*)m_pFront, _Front.iCount + 1, 
+										(LONG64)_Front.pNode->pNext, (LONG64*)&_Front))
 		{
 			m_FreeList.Free(_Front.pNode);
 			break;

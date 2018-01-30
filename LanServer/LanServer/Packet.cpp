@@ -2,10 +2,10 @@
 
 #include <Windows.h>
 
-CMemoryPool_TLS<CPacket>* CPacket::m_pMemoryPool = NULL;
+CMemoryPool<CPacket>* CPacket::m_pMemoryPool = NULL;
 
-CPacket::CPacket() :
-	m_iBufferSize(static_cast<int>(en_PACKETDEFINE::BUFFER_SIZE)),
+CPacket::CPacket() : 
+	m_iBufferSize(static_cast<int>(en_PACKETDEFINE::BUFFER_SIZE)), 
 	m_pEndPos(m_chBuffer + static_cast<int>(en_PACKETDEFINE::BUFFER_SIZE))
 {
 	ZeroMemory(&m_chBuffer, static_cast<int>(en_PACKETDEFINE::BUFFER_SIZE));
@@ -29,7 +29,7 @@ void CPacket::Clear()
 	m_lHeaderSetFlag = false;
 	m_iRefCount = 0;
 	m_iBufferSize = static_cast<int>(en_PACKETDEFINE::BUFFER_SIZE);
-	m_pEndPos = m_chBuffer + static_cast<int>(en_PACKETDEFINE::BUFFER_SIZE);
+ 	m_pEndPos = m_chBuffer + static_cast<int>(en_PACKETDEFINE::BUFFER_SIZE);
 }
 
 CPacket * CPacket::Alloc()
@@ -51,7 +51,7 @@ void CPacket::Free()
 void CPacket::MemoryPoolInit()
 {
 	if (m_pMemoryPool == nullptr)
-		m_pMemoryPool = new CMemoryPool_TLS<CPacket>();
+		m_pMemoryPool = new CMemoryPool<CPacket>();
 }
 
 void CPacket::AddRef()
@@ -62,8 +62,8 @@ void CPacket::AddRef()
 void CPacket::PushData(char *pSrc, int iSize)
 {
 	if (m_pEndPos - m_pWritePos < iSize)
-		throw st_ERR_INFO(static_cast<int>(en_PACKETDEFINE::PUSH_ERR),
-			iSize, int(m_pEndPos - m_pWritePos));
+		throw st_ERR_INFO(static_cast<int>(en_PACKETDEFINE::PUSH_ERR), 
+						iSize, int(m_pEndPos - m_pWritePos));
 	memcpy_s(m_pWritePos, iSize, pSrc, iSize);
 	m_pWritePos += iSize;
 	m_iDataSize += iSize;
@@ -72,8 +72,8 @@ void CPacket::PushData(char *pSrc, int iSize)
 void CPacket::PopData(char *pDest, int iSize)
 {
 	if (m_iDataSize < iSize)
-		throw st_ERR_INFO(static_cast<int>(en_PACKETDEFINE::POP_ERR),
-			iSize, m_iDataSize);
+		throw st_ERR_INFO(static_cast<int>(en_PACKETDEFINE::POP_ERR), 
+						iSize, m_iDataSize);
 	memcpy_s(pDest, iSize, m_pReadPos, iSize);
 	m_pReadPos += iSize;
 	m_iDataSize -= iSize;
@@ -82,8 +82,8 @@ void CPacket::PopData(char *pDest, int iSize)
 void CPacket::PushData(int iSize)
 {
 	if (m_pEndPos - m_pWritePos < iSize)
-		throw st_ERR_INFO(static_cast<int>(en_PACKETDEFINE::PUSH_ERR),
-			iSize, int(m_pEndPos - m_pWritePos));
+		throw st_ERR_INFO(static_cast<int>(en_PACKETDEFINE::PUSH_ERR), 
+						iSize, int(m_pEndPos - m_pWritePos));
 	m_pWritePos += iSize;
 	m_iDataSize += iSize;
 }
@@ -91,8 +91,8 @@ void CPacket::PushData(int iSize)
 void CPacket::PopData(int iSize)
 {
 	if (m_iDataSize < iSize)
-		throw st_ERR_INFO(static_cast<int>(en_PACKETDEFINE::PUSH_ERR),
-			iSize, m_iDataSize);
+		throw st_ERR_INFO(static_cast<int>(en_PACKETDEFINE::PUSH_ERR), 
+						iSize, m_iDataSize);
 	m_pReadPos += iSize;
 	m_iDataSize -= iSize;
 }
@@ -101,7 +101,7 @@ void CPacket::SetHeader(char *pHeader)
 {
 	if (true == InterlockedCompareExchange(&m_lHeaderSetFlag, false, true))
 		return;
-	memcpy_s(m_chBuffer, static_cast<int>(en_PACKETDEFINE::HEADER_SIZE),
+	memcpy_s(m_chBuffer, static_cast<int>(en_PACKETDEFINE::HEADER_SIZE), 
 		pHeader, static_cast<int>(en_PACKETDEFINE::HEADER_SIZE));
 }
 
@@ -110,7 +110,7 @@ void CPacket::SetHeader_CustomHeader(char *pHeader, int iCustomHeaderSize)
 	if (true == InterlockedCompareExchange(&m_lHeaderSetFlag, false, true))
 		return;
 	int iSize = static_cast<int>(en_PACKETDEFINE::HEADER_SIZE) - iCustomHeaderSize;
-	memcpy_s(&m_chBuffer[iSize], static_cast<int>(en_PACKETDEFINE::HEADER_SIZE),
+	memcpy_s(&m_chBuffer[iSize], static_cast<int>(en_PACKETDEFINE::HEADER_SIZE), 
 		pHeader, iCustomHeaderSize);
 }
 
@@ -118,14 +118,14 @@ void CPacket::SetHeader_CustomShort(unsigned short shHeader)
 {
 	if (true == InterlockedCompareExchange(&m_lHeaderSetFlag, false, true))
 		return;
-	memcpy_s(&m_chBuffer, static_cast<int>(en_PACKETDEFINE::SHORT_HEADER_SIZE),
+	memcpy_s(&m_chBuffer, static_cast<int>(en_PACKETDEFINE::SHORT_HEADER_SIZE), 
 		&shHeader, static_cast<int>(en_PACKETDEFINE::SHORT_HEADER_SIZE));
 }
 
 CPacket& CPacket::operator=(CPacket& Packet)
 {
 	m_iDataSize = Packet.m_iDataSize;
-	m_pWritePos = m_chBuffer + static_cast<int>(en_PACKETDEFINE::HEADER_SIZE) +
+	m_pWritePos = m_chBuffer + static_cast<int>(en_PACKETDEFINE::HEADER_SIZE) + 
 		m_iDataSize;
 	m_pReadPos = m_chBuffer + static_cast<int>(en_PACKETDEFINE::HEADER_SIZE);
 	memcpy_s(m_chBuffer, m_iDataSize, Packet.m_pReadPos, m_iDataSize);

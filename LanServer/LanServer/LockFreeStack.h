@@ -37,7 +37,7 @@ public:
 private:
 	long				m_lUseCount;
 	st_TOP				*m_pTop;
-	CFreeList<st_NODE>	m_FreeList;
+	CMemoryPool<st_NODE>	m_FreeList;
 };
 
 template<class Type>
@@ -76,8 +76,8 @@ inline void CLockFreeStack<Type>::Push(Type Data)
 	for (;;)
 	{
 		_pNode->pNext = _Top.pNode;
-		if (InterlockedCompareExchange128((LONG64*)m_pTop, _Top.iCount + 1,
-			(LONG64)_pNode, (LONG64*)&_Top))
+		if (InterlockedCompareExchange128((LONG64*)m_pTop, _Top.iCount + 1, 
+										(LONG64)_pNode, (LONG64*)&_Top))
 		{
 			InterlockedIncrement(&m_lUseCount);
 			return;
@@ -99,8 +99,8 @@ inline void CLockFreeStack<Type>::Pop(Type *pData)
 	_Top.iCount = m_pTop->iCount;
 	for (;;)
 	{
-		if (InterlockedCompareExchange128((LONG64*)m_pTop, _Top.iCount + 1,
-			(LONG64)_Top.pNode->pNext, (LONG64*)&_Top))
+		if (InterlockedCompareExchange128((LONG64*)m_pTop, _Top.iCount + 1, 
+									(LONG64)_Top.pNode->pNext, (LONG64*)&_Top))
 		{
 			*pData = _Top.pNode->Data;
 			m_FreeList.Free(_Top.pNode);

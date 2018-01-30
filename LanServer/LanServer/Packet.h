@@ -55,21 +55,21 @@ public:
 	char*	GetReadPtr() { return m_pReadPos; }
 	int		GetBufferSize() { return m_iBufferSize; }
 	int		GetDataSize() { return m_iDataSize; }
-	int		GetPacketSize()
-	{
-		return static_cast<int>(en_PACKETDEFINE::HEADER_SIZE) + m_iDataSize;
+	int		GetPacketSize() 
+	{ 
+		return static_cast<int>(en_PACKETDEFINE::HEADER_SIZE) + m_iDataSize; 
 	}
-	int		GetPacketSize_CustomHeader(int iCustomeHeaderSize)
+	int		GetPacketSize_CustomHeader(int iCustomeHeaderSize) 
 	{
-		return iCustomeHeaderSize + m_iDataSize;
+		return iCustomeHeaderSize + m_iDataSize; 
 	}
-	int		GetFreeSize()
-	{
-		return static_cast<int>(en_PACKETDEFINE::PAYLOAD_SIZE) - m_iDataSize;
+	int		GetFreeSize() 
+	{ 
+		return static_cast<int>(en_PACKETDEFINE::PAYLOAD_SIZE) - m_iDataSize; 
 	}
 
 public:
-	CPacket & operator=(CPacket &Packet);
+	CPacket& operator=(CPacket &Packet);
 
 	CPacket& operator<<(char Value);
 	CPacket& operator<<(unsigned char Value);
@@ -96,7 +96,7 @@ public:
 	CPacket& operator >> (double& Value);
 
 public:
-	static		CMemoryPool_TLS<CPacket> *m_pMemoryPool;
+	static		CMemoryPool<CPacket> *m_pMemoryPool;
 
 private:
 	char		m_chBuffer[static_cast<int>(en_PACKETDEFINE::BUFFER_SIZE)];

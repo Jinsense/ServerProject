@@ -10,28 +10,27 @@ CLanServerMonitor::~CLanServerMonitor()
 
 }
 
-void CLanServerMonitor::OnClientJoin(INFO *pInfo)
+void CLanServerMonitor::OnClientJoin(st_SessionInfo *pInfo)
 {
-	CPacket *pPacket = CPacket::Alloc();
-	__int64 data = 0x7fffffffffffffff;
-	*pPacket << data;
+	CPacket *_pPacket = CPacket::Alloc();
+	__int64 _iLoginData = 0x7fffffffffffffff;
+	*_pPacket << _iLoginData;
 
-	bool retval = SendPacket(pInfo->sessionkey, pPacket);
-	pPacket->Free();
-	return;
+	bool _bRetval = SendPacket(pInfo->iSessionKey, _pPacket);
+	_pPacket->Free();
 }
 
-void CLanServerMonitor::OnClientLeave(ULONG64 sessionkey)
-{
-
-}
-
-void CLanServerMonitor::OnConnectionRequest(WCHAR *pClientIP, int port)
+void CLanServerMonitor::OnClientLeave(unsigned __int64 iSessionKey)
 {
 
 }
 
-void CLanServerMonitor::OnError(int errorcode, WCHAR *pError)
+void CLanServerMonitor::OnConnectionRequest(WCHAR *pClientIP, int iPort)
 {
 
+}
+
+void CLanServerMonitor::OnError(int iErrorCode, WCHAR *pError)
+{
+	
 }
