@@ -42,7 +42,7 @@
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v141</PlatformToolset>
-    <CharacterSet>MultiByte</CharacterSet>
+    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -115,7 +115,27 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="APIHook.cpp" />
+    <ClCompile Include="Dump.cpp" />
+    <ClCompile Include="NetServer.cpp" />
+    <ClCompile Include="NetServer_Monitor.cpp" />
+    <ClCompile Include="Log.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Packet.cpp" />
+    <ClCompile Include="RingBuffer.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="APIHook.h" />
+    <ClInclude Include="Dump.h" />
+    <ClInclude Include="NetServer.h" />
+    <ClInclude Include="NetServer_Monitor.h" />
+    <ClInclude Include="LockFreeQueue.h" />
+    <ClInclude Include="LockFreeStack.h" />
+    <ClInclude Include="Log.h" />
+    <ClInclude Include="MemoryPool.h" />
+    <ClInclude Include="MemoryPool_TLS.h" />
+    <ClInclude Include="Packet.h" />
+    <ClInclude Include="RingBuffer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
