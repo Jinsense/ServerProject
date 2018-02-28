@@ -4,10 +4,11 @@
 #pragma comment(lib, "ws2_32")
 #pragma comment(lib, "winmm.lib")
 
+#include <iostream>
+
 #include "Packet.h"
 #include "RingBuffer.h"
 #include "MemoryPool.h"
-#include "MemoryPool_TLS.h"
 #include "LockFreeStack.h"
 #include "LockFreeQueue.h"
 

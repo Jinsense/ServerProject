@@ -2,7 +2,6 @@
 #define _NETSERVER_NETWORK_PACKET_H_
 
 #include "MemoryPool.h"
-#include "MemoryPool_TLS.h"
 
 class CPacket
 {

@@ -60,9 +60,6 @@
     <ClInclude Include="MemoryPool.h">
       <Filter>MemoryPool</Filter>
     </ClInclude>
-    <ClInclude Include="MemoryPool_TLS.h">
-      <Filter>MemoryPool</Filter>
-    </ClInclude>
     <ClInclude Include="Packet.h">
       <Filter>Network</Filter>
     </ClInclude>
